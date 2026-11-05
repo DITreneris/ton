@@ -84,5 +84,16 @@ def test_worker_cycle_survives_telegram_404(settings, clock, ledger):
     with patch.object(worker.poller, "fetch_scope_inputs", side_effect=ProviderError("offline")):
         summary = worker.cycle()
     assert summary["snapshot_id"]
+    assert "skip" in summary
     assert client.calls == 1
     worker.close()
+
+
+def test_configure_logging_silences_httpx():
+    import logging
+
+    from ton_gram.logutil import configure_logging
+
+    configure_logging()
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("ton_gram.worker").getEffectiveLevel() == logging.INFO
