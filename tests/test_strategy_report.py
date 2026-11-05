@@ -26,7 +26,19 @@ def test_daily_report(settings: Settings, clock: FrozenClock, ledger):
     report = build_daily_report(ledger, clock)
     assert report["mode"] == "PAPER"
     assert report["candidates"] == 0
+    assert report["trades"] == []
+    assert report["gross_pnl_usdt_micro"] == 0
+    assert report["net_pnl_usdt_micro"] == 0
+    assert report["rejected_candidates_by_reason"] == {}
+    assert "quote_age" in report
+    assert "feed_uptime" in report
     assert "No signatures" in report["notes"][-1]
+
+
+def test_daily_report_honors_date(settings: Settings, clock: FrozenClock, ledger):
+    report = build_daily_report(ledger, clock, "2020-01-01")
+    assert report["day_utc"] == "2020-01-01"
+    assert report["trades_count"] == 0
 
 
 def test_first_mark_is_start_of_day(settings: Settings, clock: FrozenClock, ledger):

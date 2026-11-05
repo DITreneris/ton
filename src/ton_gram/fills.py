@@ -8,6 +8,7 @@ from ton_gram.units import apply_bps, reduce_by_bps, usdt_per_gram_micro
 
 
 def stressed_ask_units(quote: Quote, settings: Settings, offer_units: int) -> tuple[int, int]:
+    """Scale the quoted ask to the candidate offer, then apply extra stress."""
     if quote.offer_units <= 0:
         return 0, 0
     raw = (quote.ask_units * offer_units) // quote.offer_units
@@ -16,6 +17,10 @@ def stressed_ask_units(quote: Quote, settings: Settings, offer_units: int) -> tu
 
 
 def network_cost_gram_nano(quote: Quote, settings: Settings) -> int:
+    measured = int(getattr(settings, "measured_net_cost_p90_nano", 0) or 0)
+    if measured > 0:
+        extra = apply_bps(measured, settings.network_cost_stress_margin_bps)
+        return measured + extra
     extra = apply_bps(quote.gas_estimate_nano + quote.forward_gas_nano, settings.network_cost_stress_bps)
     return quote.gas_estimate_nano + quote.forward_gas_nano + extra
 
@@ -83,5 +88,6 @@ def apply_fill_to_balances(
         usdt_micro = usdt_micro - offer_units
         gram_nano = gram_nano + fill.filled_ask_units - fill.network_cost_gram_nano
     if gram_nano < gas_reserve_nano:
+        # Costs can consume reserve in a stressed paper fill; keep non-negative.
         gram_nano = max(0, gram_nano)
     return max(0, gram_nano), max(0, usdt_micro)
