@@ -8,12 +8,40 @@ from ton_gram.clock import Clock, format_utc
 from ton_gram.ledger import Ledger
 from ton_gram.stats import summarize_ints
 
+_COUNT_TABLES = (
+    "quotes",
+    "candidates",
+    "risk_decisions",
+    "intents",
+    "fills",
+    "snapshots",
+    "assessments",
+)
+
+
+def _counts(ledger: Ledger) -> dict[str, int]:
+    """Count ledger rows without iterating a verdict string as SQLite bindings."""
+    try:
+        return ledger.counts()
+    except Exception:
+        out: dict[str, int] = {}
+        for table in _COUNT_TABLES:
+            row = ledger.conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
+            out[table] = int(row["n"])
+        for key, verdict in (("approvals", "APPROVE"), ("rejections", "REJECT")):
+            row = ledger.conn.execute(
+                "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
+                [verdict],
+            ).fetchone()
+            out[key] = int(row["n"])
+        return out
+
 
 def build_daily_report(ledger: Ledger, clock: Clock, day_utc: str | None = None) -> dict[str, Any]:
     day = day_utc or format_utc(clock.now())[:10]
     rows = ledger.day_rows(day)
     position = ledger.get_position()
-    counts = ledger.counts()
+    counts = _counts(ledger)
     fills = [dict(r) for r in rows["fills"]]
     decisions = [dict(r) for r in rows["decisions"]]
     intents = [dict(r) for r in rows["intents"]]
