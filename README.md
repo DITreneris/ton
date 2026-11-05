@@ -36,8 +36,8 @@ All amounts are integer base units: GRAM nano (9 dp), USD₮ micro (6 dp).
 | Min pool liquidity | $500,000 |
 | GRAM gas reserve | 0.25 GRAM (cannot be offered) |
 | Conservative extra slippage | 50 bps |
-| Delay stress | 8 s + 5 bps adverse |
-| Network cost | quoted gas + 1× extra |
+| Delay stress | measured p90 latency + 2 s (fallback 8 s + 5 bps if no profile) |
+| Network cost | measured p90 net GRAM + 25% (fallback quoted gas + 1× extra) |
 | One unresolved intent | Per paper wallet |
 | Entry halt | Sticky across restarts; requires `ton-gram rearm` or `POST /v1/control/rearm` |
 
@@ -71,7 +71,10 @@ Other commands:
 ```bash
 python -m ton_gram once --snapshot-out artifacts/sample_snapshot.json
 python -m ton_gram verify-scope
-python -m ton_gram report
+python -m ton_gram report --day 2026-11-05
+python -m ton_gram measure-gas --target 60
+python -m ton_gram drill all --isolated --http
+python -m ton_gram telegram-test
 python -m ton_gram halt
 python -m ton_gram rearm
 python -m ton_gram validate-result path/to/MONITOR_RESULT.json --snapshot-json artifacts/sample_snapshot.json
@@ -92,6 +95,7 @@ pytest
   "scope_verification": { "status": "PASS", "network": "mainnet", "checks": [] },
   "freshness": { "quote_age_ms": 12, "max_quote_age_ms": 15000, "stale": false },
   "feed_health": { "stonfi_quotes": { "status": "UP", "latency_ms": 80 } },
+  "cost_model": { "source": "measured", "delay_stress_s": 3, "measured_net_cost_p90_nano": 8000000 },
   "required_coverage": { "quotes_both_directions": true, "pool_liquidity": true, "scope": true },
   "incidents": [],
   "open_execution_state": { "unresolved_intents": [], "entry_halt": false, "position": {} },
@@ -101,9 +105,37 @@ pytest
 
 `POST /v1/monitor-result` validates the Grok `MONITOR_RESULT` contract (schema, snapshot binding, evidence-ID membership, late-result window) and records `VALID` / `INVALID_*` / `UNAVAILABLE`. Invalid or missing assessments have **zero execution authority**.
 
+`GET /v1/report/daily?date=YYYY-MM-DD` (same snapshot bearer) returns trades, gross/net PnL after stressed costs, drawdown, fees, rejected candidates by reason, halt events, feed uptime, and quote-age stats. Omit `date` for today UTC.
+
+## Gas refund measurement
+
+`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report.
+
+## Recovery drills
+
+Admin-only. Disabled unless `TON_GRAM_DRILL_TOKEN` is set. Local isolated run (does not touch the paper ledger):
+
+```bash
+python -m ton_gram drill all --isolated --http
+```
+
+Against a running instance (including Railway), drills mutate that instance's paper ledger:
+
+```bash
+export TON_GRAM_DRILL_TOKEN=long-random-admin-token
+python -m ton_gram drill all --base-url https://YOUR-RAILWAY-HOST --token "$TON_GRAM_DRILL_TOKEN"
+# or
+curl -X POST -H "Authorization: Bearer $TON_GRAM_DRILL_TOKEN" \
+  https://YOUR-RAILWAY-HOST/v1/drill/all
+```
+
+Scenarios: `kill_before_broadcast`, `kill_after_broadcast`, `duplicate_event`, `rpc_timeout`, `bounce`, `delayed_refund`. Each asserts at most one fill, no false fill, and a terminal intent or latched incident.
+
 ## Telegram
 
 Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Alerts are deduplicated per key for `TON_GRAM_TELEGRAM_DEDUPE_S` seconds (default 1 hour). There is no inbound Telegram command surface.
+
+Keys that fire: `halt`, `incident`, `scope_fail`, `feed_down`, `missed_heartbeat`, `daily_summary_YYYY-MM-DD`. Send one uncapped test message with `python -m ton_gram telegram-test`.
 
 ## 24/7 on a small VPS / Fly / Railway
 
