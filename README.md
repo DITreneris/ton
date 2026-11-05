@@ -54,7 +54,7 @@ mkdir -p data
 python -m ton_gram worker
 ```
 
-The process starts the poller and a read-only HTTP server on **port 43177**.
+The process starts the poller and a read-only HTTP server on **port 43177** (`TON_GRAM_PORT`, or Railway's `PORT` if that is unset).
 
 ```bash
 # public health / dashboard (no secrets)
@@ -107,7 +107,7 @@ Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GR
 
 ## 24/7 on a small VPS / Fly / Railway
 
-Docker image is self-contained. Persist `/data` so the SQLite ledger, halt latch, and snapshots survive restarts.
+Docker image is self-contained. The Dockerfile does **not** declare `VOLUME` (Railway rejects that instruction). Persist `/data` yourself so the SQLite ledger, halt latch, and snapshots survive restarts: use `docker run -v` locally, or attach a Railway volume at `/data`.
 
 ```bash
 docker build -t ton-gram-paper .
@@ -134,7 +134,7 @@ Use the included `fly.toml` (`internal_port = 43177`, volume mounted at `/data`)
 
 **Railway**
 
-Create a service from this repo, set the same env vars, attach a volume at `/data`, and expose port `43177`. Health check: `GET /healthz`.
+Create a service from this repo, set the same env vars, and attach a **Railway volume** at `/data` (do not rely on a Dockerfile `VOLUME`). The worker listens on Railway's `PORT` when `TON_GRAM_PORT` is unset. Health check: `GET /healthz`.
 
 Backup `data/paper.sqlite3` regularly. This is the only durable store.
 

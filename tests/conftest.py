@@ -28,6 +28,7 @@ def clock() -> FrozenClock:
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         data_dir=tmp_path,
+        port=43177,
         snapshot_bearer_token="test-token",
         enable_toncenter=False,
         poll_interval_s=0.01,

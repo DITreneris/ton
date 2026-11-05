@@ -7,6 +7,7 @@ STON.fi v2 GRAM/USD₮ pool and router are pinned from api.ston.fi mainnet metad
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,8 +17,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ton_gram.addresses import addresses_equal
 from ton_gram.units import GRAM_SCALE, USDT_SCALE
 
+# Official issuer-verified USD₮ Jetton master on TON (Tether supported-protocols).
 OFFICIAL_USDT_JETTON_MASTER = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
+
+# Native GRAM (formerly Toncoin) as represented by STON.fi / TON zero address.
 NATIVE_GRAM_ADDRESS = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"
+
+# Highest-liquidity STON.fi v2 ConstantProduct GRAM/USD₮ pool (2026-11-05 live check).
 PINNED_POOL_ADDRESS = "EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4"
 PINNED_ROUTER_ADDRESS = "EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3"
 PINNED_PTON_MASTER = "EQBnGWMCf3-FZZq1W4IWcWiGAc3PHuZ0_H-7sad2oY00o83S"
@@ -28,6 +34,7 @@ PINNED_ROUTER_TYPE = "ConstantProduct"
 PINNED_PTON_VERSION = "2.1"
 PINNED_NETWORK = "mainnet"
 
+# Documented STON.fi v2 router opcodes. Paper mode never encodes or signs them.
 DECLARED_OPCODES = {
     "getter_pool_address": "0x2993ade0",
     "reset_gas": "0x29d22935",
@@ -36,6 +43,20 @@ DECLARED_OPCODES = {
 
 POLICY_VERSION = "paper-1.0.0"
 PAPER_WALLET_ID = "paper_wallet_1"
+
+DEFAULT_LISTEN_PORT = 43177
+
+
+def resolve_listen_port() -> int:
+    """TON_GRAM_PORT wins; otherwise honor Railway/platform PORT; else 43177."""
+    explicit = os.environ.get("TON_GRAM_PORT")
+    if explicit not in (None, ""):
+        return int(explicit)
+    platform = os.environ.get("PORT")
+    if platform not in (None, ""):
+        return int(platform)
+    return DEFAULT_LISTEN_PORT
+
 
 LOOKALIKE_TICKERS = frozenset(
     {
@@ -78,27 +99,27 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path("data")
     host: str = "0.0.0.0"
-    port: int = 43177
+    port: int = Field(default_factory=resolve_listen_port)
     snapshot_bearer_token: str = Field(default="paper-dev-token-change-me")
 
     poll_interval_s: float = 15.0
     http_timeout_s: float = 12.0
     max_quote_age_ms: int = 15_000
-    min_liquidity_usd_micro: int = 500_000_000_000
-    gram_gas_reserve_nano: int = 250_000_000
+    min_liquidity_usd_micro: int = 500_000_000_000  # $500,000 in USDT micro
+    gram_gas_reserve_nano: int = 250_000_000  # 0.25 GRAM
 
     funding_cap_usdt_micro: int = 10_000 * USDT_SCALE
-    position_cap_bps: int = 200
-    daily_loss_bps: int = 100
-    drawdown_bps: int = 300
+    position_cap_bps: int = 200  # 2%
+    daily_loss_bps: int = 100  # 1%
+    drawdown_bps: int = 300  # 3%
     max_trade_usdt_micro: int = 50 * USDT_SCALE
     max_all_in_cost_bps: int = 80
     conservative_slippage_bps: int = 50
     delay_stress_s: int = 8
     delay_adverse_bps: int = 5
-    network_cost_stress_bps: int = 10_000
-    quote_offer_gram_nano: int = GRAM_SCALE
-    quote_offer_usdt_micro: int = 10 * USDT_SCALE
+    network_cost_stress_bps: int = 10_000  # 1x extra on quoted gas (2x total)
+    quote_offer_gram_nano: int = GRAM_SCALE  # 1 GRAM
+    quote_offer_usdt_micro: int = 10 * USDT_SCALE  # 10 USD₮
     simulate_slippage_tolerance: str = "0.01"
 
     strategy_lookback: int = 8
