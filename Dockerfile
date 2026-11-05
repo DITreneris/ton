@@ -8,7 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
-COPY artifacts ./artifacts
+# Measured gas_profile.json is package data under src/ton_gram/data/.
+# Do not COPY artifacts/: .dockerignore excludes that directory.
 RUN pip install --no-cache-dir . \
     && useradd --create-home --uid 10001 appuser \
     && mkdir -p /data \
