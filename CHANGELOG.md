@@ -11,16 +11,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Lean document index, per-document versioning, and this changelog.
 - Closed learning loop: `python -m ton_gram learn` scores a paper day and writes advisory lessons. No auto-apply, no 25 bps retune.
+- `ROADMAP.md`: destination is a self-funded profitable GRAM bot by late 2027. January 2027 is go / no-go, not a launch.
 
 ### Changed
 
 - Live `flat` cycles stay `flat`: size-matched USD₮ mid, `mid_spread_max_bps=200`, feed-down keeps `HARD_HALT`.
+- Paper policy: live signing is Phase 3, not Phase 2. `learn` scores live Settings. All-in cap (80 bps) is documented, not raised.
+
+### Fixed
+
+- `recover()` no longer fills before `delay_stress_s`. TTL expire is `EXPIRED`, not `SETTLEMENT_UNKNOWN`.
+- `reset-paper` clears `learn_last_json`.
+- `/healthz` no longer advertises `drill_enabled`.
+- Railway image: `.dockerignore` un-ignores `ROADMAP.md` so `COPY ROADMAP.md` is in the build context.
 
 ### Documents
 - `document-system` v1 added: initial catalog
 - `learning-loop` v1 added: initial catalog
 - `paper-policy` v1 added: initial catalog
 - `pinned-route` v1 added: initial catalog
+- `document-system` v2 changed: 2027 self-sustain roadmap
+- `paper-policy` v2 changed: 2027 self-sustain roadmap
+- `roadmap` v1 added: 2027 self-sustain roadmap
+- `document-system` v3 changed: review-fix: Phase 3 keys, all-in cap, recover delay, live learn rules
+- `learning-loop` v2 changed: review-fix: Phase 3 keys, all-in cap, recover delay, live learn rules
+- `paper-policy` v3 changed: review-fix: Phase 3 keys, all-in cap, recover delay, live learn rules
+- `roadmap` v2 changed: review-fix: Phase 3 keys, all-in cap, recover delay, live learn rules
+- `document-system` v4 changed: file operator lessons: dockerignore glob, live flat book, Railway=GitHub
+- `learning-loop` v3 changed: file operator lessons: dockerignore glob, live flat book, Railway=GitHub
+- `lessons` v1 added: file operator lessons: dockerignore glob, live flat book, Railway=GitHub
+- `learning-loop` v4 changed: file daily_loss_marks_inventory: first live fade + inventory-mark halt
+- `lessons` v2 changed: file daily_loss_marks_inventory: first live fade + inventory-mark halt
+- `paper-policy` v4 changed: file daily_loss_marks_inventory: first live fade + inventory-mark halt
+- `roadmap` v3 changed: file daily_loss_marks_inventory: first live fade + inventory-mark halt
+- `learning-loop` v5 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
+- `lessons` v3 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
+- `paper-policy` v5 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
+- `roadmap` v4 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
 
 ## 2026-11-04
 
