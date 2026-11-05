@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "updated_utc": "2026-11-05T08:23:12Z",
+  "documents": [
+    {
+      "id": "document-system",
+      "title": "Document system",
+      "path": "document-system.md",
+      "version": 1,
+      "sha256": "6b3449af16828b906660733d31865a0ff2b141d4c031025294fe715e85d6d472",
+      "updated_utc": "2026-11-05T08:23:12Z",
+      "status": "current"
+    },
+    {
+      "id": "learning-loop",
+      "title": "Learning loop",
+      "path": "learning-loop.md",
+      "version": 1,
+      "sha256": "f914172adefeac1e063f4923a96a5e264bf1e4eb8e6ff36474bef7d52f2d3122",
+      "updated_utc": "2026-11-05T08:23:12Z",
+      "status": "current"
+    },
+    {
+      "id": "paper-policy",
+      "title": "Paper policy",
+      "path": "paper-policy.md",
+      "version": 1,
+      "sha256": "13f62b36dc2c51c96782648da30e041666177140934a4779d9be10a8dbda585b",
+      "updated_utc": "2026-11-05T08:23:12Z",
+      "status": "current"
+    },
+    {
+      "id": "pinned-route",
+      "title": "Pinned route",
+      "path": "pinned-route.md",
+      "version": 1,
+      "sha256": "eef413a4c31a0535173d25c2a346fb79efa1a62cea029b9aad544ad45a673990",
+      "updated_utc": "2026-11-05T08:23:12Z",
+      "status": "current"
+    }
+  ]
+}
