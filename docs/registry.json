@@ -1,32 +1,41 @@
 {
   "schema_version": "1.0",
-  "updated_utc": "2026-11-05T08:23:12Z",
+  "updated_utc": "2026-11-05T08:57:45Z",
   "documents": [
     {
       "id": "document-system",
       "title": "Document system",
       "path": "document-system.md",
-      "version": 1,
-      "sha256": "6b3449af16828b906660733d31865a0ff2b141d4c031025294fe715e85d6d472",
-      "updated_utc": "2026-11-05T08:23:12Z",
+      "version": 4,
+      "sha256": "4d5fd987bb695c2daa7d52d15b102295e70c12fabca4b7656cf0edadaa4f24e8",
+      "updated_utc": "2026-11-05T08:57:45Z",
       "status": "current"
     },
     {
       "id": "learning-loop",
       "title": "Learning loop",
       "path": "learning-loop.md",
+      "version": 3,
+      "sha256": "7f48af97f46f79181d10e206edec493e0ec8b084e67413d74c0b5a5236c3476c",
+      "updated_utc": "2026-11-05T08:57:45Z",
+      "status": "current"
+    },
+    {
+      "id": "lessons",
+      "title": "Operator lessons",
+      "path": "lessons.md",
       "version": 1,
-      "sha256": "f914172adefeac1e063f4923a96a5e264bf1e4eb8e6ff36474bef7d52f2d3122",
-      "updated_utc": "2026-11-05T08:23:12Z",
+      "sha256": "4c6300641603a4d4135fc2b343b99892efd4b79bcec42d6e52ac1a509dc95590",
+      "updated_utc": "2026-11-05T08:57:45Z",
       "status": "current"
     },
     {
       "id": "paper-policy",
       "title": "Paper policy",
       "path": "paper-policy.md",
-      "version": 1,
-      "sha256": "13f62b36dc2c51c96782648da30e041666177140934a4779d9be10a8dbda585b",
-      "updated_utc": "2026-11-05T08:23:12Z",
+      "version": 3,
+      "sha256": "1de89755768cab2ff7734a20630ba9a1ba369206501e39ce8c7cd31c129ded4a",
+      "updated_utc": "2026-11-05T08:41:10Z",
       "status": "current"
     },
     {
@@ -36,6 +45,15 @@
       "version": 1,
       "sha256": "eef413a4c31a0535173d25c2a346fb79efa1a62cea029b9aad544ad45a673990",
       "updated_utc": "2026-11-05T08:23:12Z",
+      "status": "current"
+    },
+    {
+      "id": "roadmap",
+      "title": "ROADMAP \u2014 self-sustaining profitable TON GRAM bot",
+      "path": "roadmap.md",
+      "version": 2,
+      "sha256": "61a8b0958fa47e55fc7d46e2a274758f03c758968dbd009613b5602b557f8f7a",
+      "updated_utc": "2026-11-05T08:41:10Z",
       "status": "current"
     }
   ]
