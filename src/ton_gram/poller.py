@@ -240,10 +240,12 @@ class MarketPoller:
             OFFICIAL_USDT_JETTON_MASTER,
             self.settings.quote_offer_gram_nano,
         )
+        implied_usdt = require_int("ask_units", gram_to_usdt.get("ask_units") or 0)
+        usdt_offer = implied_usdt if implied_usdt > 0 else self.settings.quote_offer_usdt_micro
         usdt_to_gram = self.ston.simulate_swap(
             OFFICIAL_USDT_JETTON_MASTER,
             NATIVE_GRAM_ADDRESS,
-            self.settings.quote_offer_usdt_micro,
+            usdt_offer,
         )
         return {
             Direction.GRAM_TO_USDT: quote_from_simulation(
