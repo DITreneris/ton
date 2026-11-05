@@ -39,6 +39,7 @@ def create_app(
     ledger: Ledger,
     clock: Clock,
     alerter: TelegramAlerter | None = None,
+    worker: Any = None,
 ) -> FastAPI:
     app = FastAPI(title="TON GRAM paper snapshot", version="1.0.0")
     hydrate_cost_model(settings, ledger)
@@ -46,6 +47,7 @@ def create_app(
     app.state.ledger = ledger
     app.state.clock = clock
     app.state.alerter = alerter or TelegramAlerter(settings, ledger)
+    app.state.worker = worker
 
     def require_bearer(authorization: str | None = Header(default=None)) -> None:
         token = settings.snapshot_bearer_token
@@ -152,7 +154,11 @@ def create_app(
 
     @app.post("/v1/control/reset")
     def reset_paper(_: None = Depends(require_bearer)) -> dict[str, Any]:
-        result = ledger.reset_paper(reason="OPERATOR")
+        worker = getattr(app.state, "worker", None)
+        if worker is not None:
+            result = worker.reset_paper(reason="OPERATOR")
+        else:
+            result = ledger.reset_paper(reason="OPERATOR")
         app.state.alerter.send("incident", "Operator reset paper ledger to starting balances")
         return result
 

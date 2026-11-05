@@ -44,7 +44,7 @@ def _boot(settings: Settings | None = None) -> tuple[Settings, Clock, Ledger]:
 def cmd_worker(args: argparse.Namespace) -> int:
     settings, clock, ledger = _boot()
     worker = PaperWorker(settings, clock, ledger)
-    app = create_app(settings, ledger, clock, worker.alerter)
+    app = create_app(settings, ledger, clock, worker.alerter, worker)
     thread = threading.Thread(target=worker.run_forever, name="paper-worker", daemon=True)
     thread.start()
     try:

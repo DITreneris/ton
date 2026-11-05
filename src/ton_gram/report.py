@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import Counter
 from typing import Any
 
 from ton_gram.clock import Clock, format_utc
 from ton_gram.ledger import Ledger
 from ton_gram.stats import summarize_ints
+
+log = logging.getLogger("ton_gram.report")
 
 _COUNT_TABLES = (
     "quotes",
@@ -24,6 +27,7 @@ def _counts(ledger: Ledger) -> dict[str, int]:
     try:
         return ledger.counts()
     except Exception:
+        log.exception("ledger.counts() failed; using safe fallback")
         out: dict[str, int] = {}
         for table in _COUNT_TABLES:
             row = ledger.conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
