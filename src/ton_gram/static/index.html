@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TON GRAM paper worker</title>
+  <style>
+    :root {
+      --bg: #0c1117;
+      --panel: #151b23;
+      --ink: #e8eef5;
+      --muted: #93a0b0;
+      --line: #273140;
+      --pass: #3dd68c;
+      --fail: #ff6b6b;
+      --warn: #f5c16c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 15px/1.45 ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header, main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    header { padding-top: 28px; }
+    h1 { font-size: 1.4rem; margin: 0 0 6px; }
+    p.sub { margin: 0; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .v { font-size: 1.15rem; margin-top: 4px; word-break: break-word; }
+    .ok { color: var(--pass); }
+    .bad { color: var(--fail); }
+    .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    #error { color: var(--fail); display: none; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TON GRAM paper worker</h1>
+    <p class="sub">Read-only mainnet observations. Simulated ledger. No signing. No broadcast.</p>
+    <p id="error"></p>
+  </header>
+  <main>
+    <div class="grid" id="kpis"></div>
+    <div class="card" style="margin-top:12px">
+      <div class="k">Scope and freshness</div>
+      <div id="scope" class="mono"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="k">Evidence registry</div>
+      <div id="evidence"></div>
+    </div>
+  </main>
+  <script>
+    function cls(ok) { return ok ? "ok" : "bad"; }
+    function card(k, v, extra) {
+      return `<section class="card"><div class="k">${k}</div><div class="v ${extra || ""}">${v}</div></section>`;
+    }
+    async function load() {
+      const res = await fetch("/public/status");
+      if (!res.ok) throw new Error("status " + res.status);
+      const s = await res.json();
+      const halt = s.open_execution_state && s.open_execution_state.entry_halt;
+      document.getElementById("kpis").innerHTML = [
+        card("Mode", s.mode || "—"),
+        card("Snapshot", s.snapshot_id || "none", "mono"),
+        card("As of (UTC)", s.as_of_utc || "—", "mono"),
+        card("Scope", s.scope_status, cls(s.scope_status === "PASS")),
+        card("Freshness", s.stale ? "STALE" : "CURRENT", s.stale ? "bad" : "ok"),
+        card("Entry halt", halt ? (s.halt_reason || "LATCHED") : "OPEN", halt ? "bad" : "ok"),
+        card("Quote age (ms)", s.quote_age_ms ?? "—"),
+        card("Equity (USDT micro)", s.equity_usdt_micro ?? "—"),
+      ].join("");
+      document.getElementById("scope").textContent =
+        `network=${s.network} pool=${s.pool} router=${s.router}\n` +
+        `USDT=${s.usdt} GRAM=${s.native}\n` +
+        `coverage=${JSON.stringify(s.required_coverage)}`;
+      const ev = (s.evidence_ids || []).map(id => `<tr><td class="mono">${id}</td></tr>`).join("");
+      document.getElementById("evidence").innerHTML = ev ? `<table>${ev}</table>` : "<p class='sub'>No snapshot yet.</p>";
+    }
+    load().catch(err => {
+      const el = document.getElementById("error");
+      el.style.display = "block";
+      el.textContent = "Public status unavailable: " + err.message;
+    });
+  </script>
+</body>
+</html>
