@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from typing import Any
 
 from ton_gram.clock import Clock, format_utc
 from ton_gram.config import Settings
@@ -11,6 +12,8 @@ from ton_gram.units import GRAM_SCALE, USDT_SCALE, bps_delta, gram_from_usdt
 
 
 class BaselineStrategy:
+    """Mean-reversion vs a simple SMA of mid USDT-micro per GRAM."""
+
     def __init__(self, settings: Settings, clock: Clock) -> None:
         self.settings = settings
         self.clock = clock
@@ -27,6 +30,37 @@ class BaselineStrategy:
         self.mids.append(mid)
         self.cycles_since_signal += 1
         return mid
+
+    def signal_view(self, mid: int) -> dict[str, Any]:
+        """Why the baseline did or did not emit. Safe to log every cycle."""
+        lookback = max(2, self.settings.strategy_lookback)
+        threshold = self.settings.strategy_entry_deviation_bps
+        samples = len(self.mids)
+        if samples < lookback or mid <= 0:
+            return {
+                "skip": "warming",
+                "samples": samples,
+                "lookback": lookback,
+                "deviation_bps": None,
+                "threshold_bps": threshold,
+                "sma_usdt_per_gram_micro": None,
+            }
+        sma = sum(self.mids) // samples
+        deviation = bps_delta(mid, sma) if sma > 0 else 0
+        if self.cycles_since_signal < self.settings.strategy_cooldown_cycles:
+            skip = "cooldown"
+        elif sma <= 0 or abs(deviation) < threshold:
+            skip = "flat"
+        else:
+            skip = None
+        return {
+            "skip": skip,
+            "samples": samples,
+            "lookback": lookback,
+            "deviation_bps": deviation,
+            "threshold_bps": threshold,
+            "sma_usdt_per_gram_micro": sma,
+        }
 
     def maybe_candidate(
         self,
