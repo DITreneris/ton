@@ -671,6 +671,27 @@ class Ledger:
             return None
         return json.loads(raw)
 
+    def load_signal_skips(self, day_utc: str) -> dict[str, int]:
+        empty = {"warming": 0, "flat": 0, "cooldown": 0, "fired": 0, "spread": 0}
+        raw = self.get_control(f"signal_skips_{day_utc}")
+        if not raw:
+            return empty
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return empty
+        out = dict(empty)
+        for key, value in data.items():
+            out[str(key)] = int(value or 0)
+        return out
+
+    def bump_signal_skip(self, day_utc: str, skip: str | None) -> dict[str, int]:
+        counts = self.load_signal_skips(day_utc)
+        bucket = "fired" if skip is None else skip
+        counts[bucket] = int(counts.get(bucket) or 0) + 1
+        self.set_control(f"signal_skips_{day_utc}", json.dumps(counts))
+        return counts
+
     def get_intent(self, intent_id: str) -> Intent | None:
         row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
         return _intent_from_row(row) if row else None
@@ -727,6 +748,12 @@ class Ledger:
         self.set_control("halt_reason", "")
         self.set_control("recovered", "0")
         self.set_control("strategy_state_json", "")
+        stale_skips = self.conn.execute(
+            "SELECT k FROM control_state WHERE k LIKE 'signal_skips_%'"
+        ).fetchall()
+        for row in stale_skips:
+            self.conn.execute("DELETE FROM control_state WHERE k = ?", (row["k"],))
+        self.conn.commit()
         self.conn.execute(
             "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
             (now, "reset", reason),
