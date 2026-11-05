@@ -365,7 +365,6 @@ class Ledger:
             sod_equity = equity
         else:
             sod_equity = equity - position.daily_pnl_usdt_micro
-            # keep daily as equity - start-of-day; start-of-day inferred from previous daily
             start = position.equity_usdt_micro - position.daily_pnl_usdt_micro
             sod_equity = start
         position.as_of_utc = now
@@ -584,12 +583,12 @@ class Ledger:
             out[table] = int(row["n"])
         row = self.conn.execute(
             "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
-            (RiskVerdict.APPROVE.value,),
+            (RiskVerdict.APPROVE.value),
         ).fetchone()
         out["approvals"] = int(row["n"])
         row = self.conn.execute(
             "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
-            (RiskVerdict.REJECT.value,),
+            (RiskVerdict.REJECT.value),
         ).fetchone()
         out["rejections"] = int(row["n"])
         return out
@@ -642,7 +641,7 @@ class Ledger:
         now = format_utc(self.clock.now())
         for name, health in feed_health.items():
             self.conn.execute(
-                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?)",
+                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?, ?)",
                 (
                     now,
                     name,
