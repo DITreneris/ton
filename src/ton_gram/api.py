@@ -75,7 +75,6 @@ def create_app(
             "entry_halt": ledger.entry_halt,
             "has_snapshot": snap is not None,
             "last_heartbeat_utc": ledger.last_heartbeat_utc() or None,
-            "drill_enabled": bool(settings.drill_token),
         }
 
     @app.get("/")
@@ -181,7 +180,7 @@ def create_app(
     ) -> dict[str, Any]:
         if date and not DATE_RE.match(date):
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-        return run_learn(ledger, clock, date)
+        return run_learn(ledger, clock, date, settings)
 
     @app.get("/v1/learn")
     def learn_latest(_: None = Depends(require_bearer)) -> dict[str, Any]:
