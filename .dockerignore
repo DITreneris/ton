@@ -15,5 +15,6 @@ artifacts
 *.md
 !README.md
 !CHANGELOG.md
+!ROADMAP.md
 !docs/
 !docs/**
