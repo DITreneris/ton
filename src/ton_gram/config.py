@@ -95,12 +95,15 @@ class Settings(BaseSettings):
 
     stonfi_base_url: str = "https://api.ston.fi"
     toncenter_url: str = "https://toncenter.com/api/v2/jsonRPC"
+    toncenter_v3_url: str = "https://toncenter.com/api/v3"
+    tonapi_base_url: str = "https://tonapi.io"
     enable_toncenter: bool = True
 
     data_dir: Path = Path("data")
     host: str = "0.0.0.0"
     port: int = Field(default_factory=resolve_listen_port)
     snapshot_bearer_token: str = Field(default="paper-dev-token-change-me")
+    drill_token: str = ""
 
     poll_interval_s: float = 15.0
     http_timeout_s: float = 12.0
@@ -118,6 +121,12 @@ class Settings(BaseSettings):
     delay_stress_s: int = 8
     delay_adverse_bps: int = 5
     network_cost_stress_bps: int = 10_000  # 1x extra on quoted gas (2x total)
+    measured_net_cost_p90_nano: int = 0
+    measured_latency_p90_s: float = 0.0
+    cost_model_source: str = "configured"
+    network_cost_stress_margin_bps: int = 2_500  # +25% on measured p90 net
+    latency_stress_margin_s: int = 2
+    heartbeat_miss_s: float = 45.0
     quote_offer_gram_nano: int = GRAM_SCALE  # 1 GRAM
     quote_offer_usdt_micro: int = 10 * USDT_SCALE  # 10 USD₮
     simulate_slippage_tolerance: str = "0.01"
