@@ -67,7 +67,7 @@ def test_telegram_404_does_not_raise_and_stops_retrying(settings, ledger):
     assert second["skipped"] is True
     assert second["reason"] == "rejected"
     assert client.calls == 1
-    assert ledger.recent_alert("daily_summary_2026-11-05", 3600) is True
+    assert ledger.recent_alert("daily_summary_2026-11-05", 3600) is False
 
 
 def test_worker_cycle_survives_telegram_404(settings, clock, ledger):
@@ -86,6 +86,28 @@ def test_worker_cycle_survives_telegram_404(settings, clock, ledger):
     assert summary["snapshot_id"]
     assert "skip" in summary
     assert client.calls == 1
+    worker.close()
+
+
+def test_failed_telegram_does_not_consume_daily_summary(settings, clock, ledger):
+    from ton_gram.clock import format_utc
+    from ton_gram.worker import PaperWorker
+
+    settings.telegram_enabled = True
+    settings.telegram_bot_token = "tok"
+    settings.telegram_chat_id = "1"
+    day = format_utc(clock.now())[:10]
+    key = f"daily_summary_sent_{day}"
+    bad = FakeClient(status_code=404)
+    worker = PaperWorker(settings, clock, ledger, alerter=TelegramAlerter(settings, ledger, client=bad))
+    worker._maybe_daily_summary()
+    assert bad.calls == 1
+    assert ledger.recent_alert(key, 36 * 3600) is False
+    good = FakeClient(status_code=200)
+    worker.alerter = TelegramAlerter(settings, ledger, client=good)
+    worker._maybe_daily_summary()
+    assert good.calls == 1
+    assert ledger.recent_alert(key, 36 * 3600) is True
     worker.close()
 
 

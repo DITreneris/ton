@@ -93,6 +93,41 @@ def test_execute_params_are_sequences():
     assert flagged == []
 
 
+def test_worker_reset_clears_live_sma(settings, clock, ledger):
+    worker = PaperWorker(settings, clock, ledger)
+    worker.strategy.mids.extend([1_160_000, 1_161_000, 1_162_000])
+    worker.strategy.cycles_since_signal = 0
+    worker.ledger.save_strategy_state(worker.strategy.dump_state())
+    app = create_app(settings, ledger, clock, worker=worker)
+    client = TestClient(app)
+    ok = client.post("/v1/control/reset", headers={"Authorization": "Bearer test-token"})
+    assert ok.status_code == 200
+    assert list(worker.strategy.mids) == []
+    assert worker.strategy.cycles_since_signal == settings.strategy_cooldown_cycles
+    assert worker.ledger.load_strategy_state()["mids"] == []
+    worker.close()
+
+
+def test_stale_heartbeat_on_boot_does_not_alert(settings, clock, ledger):
+    from datetime import timedelta
+    from unittest.mock import patch
+
+    from ton_gram.alerts import TelegramAlerter
+    from ton_gram.clock import format_utc
+
+    past = format_utc(clock.now() - timedelta(seconds=settings.heartbeat_miss_s + 30))
+    ledger.set_control("last_heartbeat_utc", past)
+    settings.telegram_enabled = True
+    settings.telegram_bot_token = "tok"
+    settings.telegram_chat_id = "1"
+    alerter = TelegramAlerter(settings, ledger)
+    with patch.object(alerter, "send") as send:
+        worker = PaperWorker(settings, clock, ledger, alerter=alerter)
+        worker._maybe_heartbeat_alert()
+        send.assert_not_called()
+        worker.close()
+
+
 def test_reset_http_requires_bearer(settings, clock, ledger):
     settings.snapshot_bearer_token = "test-token"
     app = create_app(settings, ledger, clock)
