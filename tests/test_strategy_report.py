@@ -9,6 +9,24 @@ from ton_gram.strategy import BaselineStrategy
 from tests.conftest import make_quote
 
 
+def test_signal_view_warming_then_flat(settings: Settings, clock: FrozenClock):
+    settings.strategy_lookback = 3
+    settings.strategy_entry_deviation_bps = 25
+    strategy = BaselineStrategy(settings, clock)
+    stable = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g0", ask_units=1_160_000)
+    stable_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u0", ask_units=8_620_000_000)
+    mid = strategy.observe_mid(stable, stable_u)
+    warming = strategy.signal_view(mid)
+    assert warming["skip"] == "warming"
+    assert warming["deviation_bps"] is None
+    for _ in range(2):
+        mid = strategy.observe_mid(stable, stable_u)
+    flat = strategy.signal_view(mid)
+    assert flat["skip"] == "flat"
+    assert flat["deviation_bps"] == 0
+    assert flat["threshold_bps"] == 25
+
+
 def test_strategy_emits_after_deviation(settings: Settings, clock: FrozenClock):
     strategy = BaselineStrategy(settings, clock)
     stable = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g1", ask_units=1_160_000)
