@@ -162,6 +162,13 @@ def build_snapshot(
             "as_of_utc": as_of,
         },
         "feed_health": feed_health,
+        "cost_model": {
+            "source": settings.cost_model_source,
+            "delay_stress_s": settings.delay_stress_s,
+            "delay_adverse_bps": settings.delay_adverse_bps,
+            "measured_net_cost_p90_nano": settings.measured_net_cost_p90_nano,
+            "profile": ledger.load_gas_profile() or {},
+        },
         "required_coverage": coverage,
         "incidents": incidents,
         "open_execution_state": {
