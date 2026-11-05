@@ -31,11 +31,20 @@ class BaselineStrategy:
         if not state:
             return
         for mid in state.get("mids") or []:
-            if isinstance(mid, int) and mid > 0:
+            if isinstance(mid, int) and not isinstance(mid, bool) and mid > 0:
                 self.mids.append(mid)
-        cooldown = int(state.get("cycles_since_signal") or self.settings.strategy_cooldown_cycles)
-        self.cycles_since_signal = max(0, cooldown)
-        self.seq = max(0, int(state.get("seq") or 0))
+        raw_cooldown = state.get("cycles_since_signal")
+        if raw_cooldown is None:
+            self.cycles_since_signal = self.settings.strategy_cooldown_cycles
+        else:
+            self.cycles_since_signal = max(0, int(raw_cooldown))
+        raw_seq = state.get("seq")
+        self.seq = max(0, int(raw_seq)) if raw_seq is not None else 0
+
+    def reset(self) -> None:
+        self.mids.clear()
+        self.cycles_since_signal = self.settings.strategy_cooldown_cycles
+        self.seq = 0
 
     def dump_state(self) -> dict[str, Any]:
         return {

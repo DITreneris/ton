@@ -56,7 +56,6 @@ class TelegramAlerter:
             )
         except httpx.HTTPError as exc:
             log.warning("telegram send failed key=%s error=%s", alert_key, exc)
-            self.ledger.record_alert(alert_key)
             return {"skipped": True, "reason": "http_error", "error": str(exc)}
         if response.status_code in _REJECT_STATUSES:
             self._rejected = True
@@ -66,7 +65,6 @@ class TelegramAlerter:
                 response.status_code,
                 alert_key,
             )
-            self.ledger.record_alert(alert_key)
             return {"skipped": True, "reason": "rejected", "status": response.status_code}
         if response.status_code >= 400:
             log.warning(
@@ -75,7 +73,6 @@ class TelegramAlerter:
                 alert_key,
                 (response.text or "")[:200],
             )
-            self.ledger.record_alert(alert_key)
             return {"skipped": True, "reason": "http_error", "status": response.status_code}
         self.ledger.record_alert(alert_key)
         try:
