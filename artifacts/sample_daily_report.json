@@ -1,0 +1,40 @@
+{
+  "day_utc": "2026-11-05",
+  "as_of_utc": "2026-11-05T04:32:19Z",
+  "mode": "PAPER",
+  "policy_version": "paper-1.0.0",
+  "candidates": 0,
+  "risk_decisions": 0,
+  "approvals": 0,
+  "rejections": 0,
+  "intents": 0,
+  "paper_fills": 0,
+  "unresolved_intents": 0,
+  "entry_halt": false,
+  "halt_reason": null,
+  "position": {
+    "gram_nano": 5000000000000,
+    "usdt_micro": 5000000000,
+    "equity_usdt_micro": 10817205000,
+    "daily_pnl_usdt_micro": 17205000,
+    "realized_pnl_usdt_micro": 0,
+    "peak_equity_usdt_micro": 10817205000,
+    "drawdown_usdt_micro": 0
+  },
+  "lifetime_counts": {
+    "quotes": 2,
+    "candidates": 0,
+    "risk_decisions": 0,
+    "intents": 0,
+    "fills": 0,
+    "snapshots": 1,
+    "assessments": 0,
+    "approvals": 0,
+    "rejections": 0
+  },
+  "notes": [
+    "Baseline is deterministic mid-deviation only.",
+    "Fills are simulated with stressed pool fee, impact, gas, slippage, and delay.",
+    "No signatures and no broadcasts were produced."
+  ]
+}

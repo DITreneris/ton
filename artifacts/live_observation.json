@@ -1,0 +1,50 @@
+{
+  "as_of_utc": "2026-11-05T04:32:19Z",
+  "snapshot_id": "snap_20261105T043219Z_1",
+  "verified_live": {
+    "scope": "PASS fail-closed on Tether official USD₮ + pinned STON.fi v2 route",
+    "network": "mainnet via config + toncenter getMasterchainInfo UP (249ms)",
+    "route_gram_to_usdt": {
+      "available": true,
+      "router": "EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3",
+      "pool": "EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4",
+      "offer_gram_nano": 1000000000,
+      "ask_usdt_micro": 1162275,
+      "fee_units": 1164,
+      "fee_percent_bps": 10,
+      "price_impact_bps": 0,
+      "gas_estimate_nano": 50000000,
+      "forward_gas_nano": 300000000,
+      "provider_latency_ms": 181
+    },
+    "route_usdt_to_gram": {
+      "available": true,
+      "router": "EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3",
+      "pool": "EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4",
+      "offer_usdt_micro": 10000000,
+      "ask_gram_nano": 8586582605,
+      "fee_units": 8599418,
+      "fee_percent_bps": 10,
+      "price_impact_bps": 0,
+      "gas_estimate_nano": 60000000,
+      "forward_gas_nano": 240000000,
+      "provider_latency_ms": 195
+    },
+    "liquidity": {
+      "lp_total_supply_usd_micro": 4625029436813,
+      "reserve_gram_nano": 1991225533535583,
+      "reserve_usdt_micro": 2316668035757
+    },
+    "mid_usdt_per_gram_micro": 1163441
+  },
+  "failed_or_unmeasured": [
+    "No signatures, no broadcast, no on-chain settlement, no bounce/refund traces.",
+    "Quote-to-settlement latency is not measurable in paper mode; delay is a configured stress (8s + 5 bps).",
+    "STON.fi fee_percent rounded to integer bps (observed ~10 bps).",
+    "Price impact on the 1 GRAM / 10 USD₮ probes rounded to 0 bps; larger clips were not swept.",
+    "Recipient, refund, and opcode encoding are declared only; not decoded from a built message.",
+    "Telegram alerts were not sent (disabled).",
+    "Grok monitor overlay was not called; validator was unit-tested only.",
+    "Daily baseline report has no holdout sample of filled paper trades from this live cycle (strategy lookback not yet met)."
+  ]
+}

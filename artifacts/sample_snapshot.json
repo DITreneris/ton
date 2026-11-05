@@ -1,0 +1,191 @@
+{
+  "schema_version": "1.0",
+  "snapshot_id": "snap_20261105T043219Z_1",
+  "as_of_utc": "2026-11-05T04:32:19Z",
+  "policy_version": "paper-1.0.0",
+  "mode": "PAPER",
+  "scope_verification": {
+    "status": "PASS",
+    "network": "mainnet",
+    "usdt_jetton_master": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
+    "usdt_issuer": "tether",
+    "native_asset": "GRAM",
+    "native_gram_address": "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c",
+    "router": "EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3",
+    "pool": "EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4",
+    "pton_master": "EQBnGWMCf3-FZZq1W4IWcWiGAc3PHuZ0_H-7sad2oY00o83S",
+    "pton_wallet": "EQCSIMGBps_qzRG3uPYhON8bucyCtu0mYdL1-u4gSz77IBa3",
+    "router_major_version": 2,
+    "router_minor_version": 2,
+    "router_type": "ConstantProduct",
+    "pton_version": "2.1",
+    "declared_opcodes": {
+      "getter_pool_address": "0x2993ade0",
+      "reset_gas": "0x29d22935",
+      "reset_pool_gas": "0x66d0dff2"
+    },
+    "checks": [
+      {
+        "name": "pinned_config",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "network",
+        "passed": true,
+        "detail": "observed=mainnet expected=mainnet"
+      },
+      {
+        "name": "usdt_issuer_contract",
+        "passed": true,
+        "detail": "contract=EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs decimals=6 kind=Jetton official=True"
+      },
+      {
+        "name": "usdt_ticker_lookalike",
+        "passed": true,
+        "detail": "ticker not used for identity"
+      },
+      {
+        "name": "native_gram_identity",
+        "passed": true,
+        "detail": "contract=EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c kind=Ton native=True"
+      },
+      {
+        "name": "gram_ticker_lookalike",
+        "passed": true,
+        "detail": "ticker not used for identity"
+      },
+      {
+        "name": "pool_identity",
+        "passed": true,
+        "detail": "pool=EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4 router=EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3 tokens=['EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c', 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs']"
+      },
+      {
+        "name": "router_identity",
+        "passed": true,
+        "detail": "router=EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3 v2.2 pton=EQBnGWMCf3-FZZq1W4IWcWiGAc3PHuZ0_H-7sad2oY00o83S"
+      },
+      {
+        "name": "quote_route_0",
+        "passed": true,
+        "detail": "router=EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3 pool=EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4 major=2"
+      },
+      {
+        "name": "quote_route_1",
+        "passed": true,
+        "detail": "router=EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3 pool=EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4 major=2"
+      }
+    ],
+    "fail_closed": true
+  },
+  "freshness": {
+    "quote_age_ms": 0,
+    "max_quote_age_ms": 15000,
+    "stale": false,
+    "as_of_utc": "2026-11-05T04:32:19Z"
+  },
+  "feed_health": {
+    "stonfi_metadata": {
+      "status": "UP",
+      "latency_ms": 497
+    },
+    "toncenter": {
+      "status": "UP",
+      "latency_ms": 249
+    },
+    "stonfi_quotes": {
+      "status": "UP",
+      "latency_ms": 195
+    }
+  },
+  "required_coverage": {
+    "quotes_both_directions": true,
+    "pool_liquidity": true,
+    "scope": true,
+    "required_ok": true
+  },
+  "incidents": [],
+  "open_execution_state": {
+    "unresolved_intents": [],
+    "entry_halt": false,
+    "halt_reason": null,
+    "paper_wallet_id": "paper_wallet_1",
+    "position": {
+      "gram_nano": 5000000000000,
+      "usdt_micro": 5000000000,
+      "reserved_usdt_micro": 0,
+      "equity_usdt_micro": 10817205000,
+      "daily_pnl_usdt_micro": 17205000,
+      "realized_pnl_usdt_micro": 0
+    },
+    "mid_usdt_per_gram_micro": 1163441
+  },
+  "evidence_registry": [
+    {
+      "evidence_id": "ev_scope_snap_20261105T043219Z_1",
+      "kind": "SCOPE",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "worker",
+      "summary": "Scope PASS network=mainnet pool pinned"
+    },
+    {
+      "evidence_id": "ev_q_g2u_20261105T043219Z",
+      "kind": "QUOTE",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "ston.fi",
+      "summary": "GRAM_TO_USDT offer=1000000000 ask=1162275 impact_bps=0 latency_ms=181"
+    },
+    {
+      "evidence_id": "ev_pool_q_g2u_20261105T043219Z",
+      "kind": "POOL",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "ston.fi",
+      "summary": "liq_usd_micro=4625029436813 gram_reserve=1991225533535583 usdt_reserve=2316668035757"
+    },
+    {
+      "evidence_id": "ev_q_u2g_20261105T043219Z",
+      "kind": "QUOTE",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "ston.fi",
+      "summary": "USDT_TO_GRAM offer=10000000 ask=8586582605 impact_bps=0 latency_ms=195"
+    },
+    {
+      "evidence_id": "ev_pool_q_u2g_20261105T043219Z",
+      "kind": "POOL",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "ston.fi",
+      "summary": "liq_usd_micro=4625029436813 gram_reserve=1991225533535583 usdt_reserve=2316668035757"
+    },
+    {
+      "evidence_id": "ev_feed_stonfi_metadata_snap_20261105T043219Z_1",
+      "kind": "FEED",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "stonfi_metadata",
+      "summary": "status=UP latency_ms=497"
+    },
+    {
+      "evidence_id": "ev_feed_toncenter_snap_20261105T043219Z_1",
+      "kind": "FEED",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "toncenter",
+      "summary": "status=UP latency_ms=249"
+    },
+    {
+      "evidence_id": "ev_feed_stonfi_quotes_snap_20261105T043219Z_1",
+      "kind": "FEED",
+      "as_of_utc": "2026-11-05T04:32:19Z",
+      "provider": "stonfi_quotes",
+      "summary": "status=UP latency_ms=195"
+    }
+  ],
+  "evidence_ids": [
+    "ev_scope_snap_20261105T043219Z_1",
+    "ev_q_g2u_20261105T043219Z",
+    "ev_pool_q_g2u_20261105T043219Z",
+    "ev_q_u2g_20261105T043219Z",
+    "ev_pool_q_u2g_20261105T043219Z",
+    "ev_feed_stonfi_metadata_snap_20261105T043219Z_1",
+    "ev_feed_toncenter_snap_20261105T043219Z_1",
+    "ev_feed_stonfi_quotes_snap_20261105T043219Z_1"
+  ]
+}
