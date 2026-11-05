@@ -148,7 +148,8 @@ class DrillHarness:
 
     def _case_kill_before_broadcast(self) -> dict[str, Any]:
         quote, intent = _reserve(self.ledger, self.clock, "before")
-        # Process dies before paper settlement. Recovery reconciles first.
+        # Restart after delay_stress — same clock as settle_due. Do not fill early.
+        _make_due(self.ledger, self.clock, intent.intent_id)
         outcomes = self.ledger.recover()
         checks = _assertions(self.ledger, intent.intent_id)
         return {"scenario": "kill_before_broadcast", "recovery": outcomes, **checks}
@@ -160,6 +161,7 @@ class DrillHarness:
             ("paper_broadcast", intent.intent_id),
         )
         self.ledger.conn.commit()
+        _make_due(self.ledger, self.clock, intent.intent_id)
         outcomes = self.ledger.recover()
         # A second recover must not create another fill.
         again = self.ledger.recover()
