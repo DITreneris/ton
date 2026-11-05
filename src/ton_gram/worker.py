@@ -43,6 +43,7 @@ class PaperWorker:
         self.last_snapshot: dict[str, Any] | None = None
         self.recovered = False
         self._load_cost_profile()
+        self._refresh_stale_heartbeat()
 
     def _load_cost_profile(self) -> None:
         hydrate_cost_model(self.settings, self.ledger)
@@ -90,7 +91,6 @@ class PaperWorker:
                 quotes[Direction.GRAM_TO_USDT],
                 quotes[Direction.USDT_TO_GRAM],
             )
-            self.ledger.save_strategy_state(self.strategy.dump_state())
             self.ledger.mark_to_market(mid)
             scope = verify_scope(
                 self.settings,
@@ -155,6 +155,9 @@ class PaperWorker:
                 else:
                     log.info("candidate rejected: %s", decision.reasons)
 
+        if mid:
+            self.ledger.save_strategy_state(self.strategy.dump_state())
+
         snapshot = build_snapshot(
             settings=self.settings,
             clock=self.clock,
@@ -204,6 +207,24 @@ class PaperWorker:
     def stop(self) -> None:
         self.stop_event.set()
 
+    def reset_paper(self, reason: str = "OPERATOR") -> dict[str, Any]:
+        result = self.ledger.reset_paper(reason=reason)
+        self.strategy.reset()
+        self.ledger.save_strategy_state(self.strategy.dump_state())
+        return result
+
+    def _refresh_stale_heartbeat(self) -> None:
+        last = self.ledger.last_heartbeat_utc()
+        if not last:
+            return
+        try:
+            age = (self.clock.now() - parse_utc(last)).total_seconds()
+        except ValueError:
+            return
+        if age > self.settings.heartbeat_miss_s:
+            log.info("stale heartbeat on boot age=%ss; refreshing without alert", int(age))
+            self.ledger.record_heartbeat()
+
     def _alert(self, key: str, text: str) -> None:
         try:
             self.alerter.send(key, text)
@@ -223,7 +244,7 @@ class PaperWorker:
 
     def _maybe_daily_summary(self) -> None:
         day = format_utc(self.clock.now())[:10]
-        key = f"daily_summary_{day}"
+        key = f"daily_summary_sent_{day}"
         if self.ledger.recent_alert(key, 36 * 3600):
             return
         try:
@@ -240,7 +261,6 @@ class PaperWorker:
             result = self.alerter.send(key, text)
         except Exception:  # noqa: BLE001
             log.exception("telegram daily summary failed")
-            self.ledger.record_alert(key)
             return
         if result.get("skipped") and result.get("reason") == "disabled":
             self.ledger.record_alert(key)
