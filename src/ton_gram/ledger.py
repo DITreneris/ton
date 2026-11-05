@@ -672,7 +672,14 @@ class Ledger:
         return json.loads(raw)
 
     def load_signal_skips(self, day_utc: str) -> dict[str, int]:
-        empty = {"warming": 0, "flat": 0, "cooldown": 0, "fired": 0, "spread": 0}
+        empty = {
+            "warming": 0,
+            "flat": 0,
+            "cooldown": 0,
+            "spread": 0,
+            "emitted": 0,
+            "approved": 0,
+        }
         raw = self.get_control(f"signal_skips_{day_utc}")
         if not raw:
             return empty
@@ -687,7 +694,7 @@ class Ledger:
 
     def bump_signal_skip(self, day_utc: str, skip: str | None) -> dict[str, int]:
         counts = self.load_signal_skips(day_utc)
-        bucket = "fired" if skip is None else skip
+        bucket = skip or "emitted"
         counts[bucket] = int(counts.get(bucket) or 0) + 1
         self.set_control(f"signal_skips_{day_utc}", json.dumps(counts))
         return counts
