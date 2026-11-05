@@ -5,15 +5,18 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from ton_gram.alerts import TelegramAlerter
-from ton_gram.clock import Clock
+from ton_gram.clock import Clock, format_utc, parse_utc
 from ton_gram.config import Settings
 from ton_gram.ledger import Ledger
+from ton_gram.measure import apply_profile, default_profile_path, load_profile
 from ton_gram.models import Direction, HaltReason, RiskVerdict
 from ton_gram.poller import MarketPoller, ProviderError
-from ton_gram.risk import evaluate_risk, should_latch_halt
+from ton_gram.report import build_daily_report
+from ton_gram.risk import evaluate_risk, quote_age_ms, should_latch_halt
 from ton_gram.scope import verify_scope
 from ton_gram.snapshot import build_snapshot
 from ton_gram.strategy import BaselineStrategy
@@ -40,6 +43,16 @@ class PaperWorker:
         self.stop_event = threading.Event()
         self.last_snapshot: dict[str, Any] | None = None
         self.recovered = False
+        self._load_cost_profile()
+
+    def _load_cost_profile(self) -> None:
+        profile = self.ledger.load_gas_profile() or load_profile(default_profile_path(self.settings))
+        if not profile:
+            bundled = Path(__file__).resolve().parents[2] / "artifacts" / "gas_profile.json"
+            profile = load_profile(bundled)
+        if profile:
+            apply_profile(self.settings, profile)
+            self.ledger.save_gas_profile(profile)
 
     def close(self) -> None:
         self.poller.close()
@@ -100,10 +113,13 @@ class PaperWorker:
             scope = verify_scope(self.settings)
             self.ledger.latch_halt(HaltReason.HARD_HALT)
             self._alert("feed_down", f"Provider failure: {exc}")
+            self._alert("halt", "Sticky halt after feed down")
 
         if not scope.passed:
             self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH)
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
+            self._alert("incident", "Scope verification failed closed")
+            self._alert("halt", "Sticky halt after scope fail")
 
         self.ledger.settle_due_intents(mid or 0)
 
@@ -137,7 +153,8 @@ class PaperWorker:
                 self.ledger.save_decision(decision)
                 if should_latch_halt(decision):
                     self.ledger.latch_halt(HaltReason.LIMIT_BREACH)
-                    self._alert("limit", f"Risk latched halt: {decision.reasons}")
+                    self._alert("halt", f"Risk latched halt: {decision.reasons}")
+                    self._alert("incident", f"Limit incident: {decision.reasons}")
                 if decision.verdict is RiskVerdict.APPROVE:
                     intent = self.ledger.create_paper_intent(candidate, quote, decision)
                     log.info("reserved paper intent %s", intent.intent_id)
@@ -155,6 +172,13 @@ class PaperWorker:
             recovery=recovery,
         )
         self.last_snapshot = snapshot
+        age = max((quote_age_ms(q, self.clock) for q in quotes.values()), default=None)
+        self.ledger.record_feed_samples(feed_health, age)
+        self._maybe_heartbeat_alert()
+        self.ledger.record_heartbeat()
+        self._maybe_daily_summary()
+        if snapshot.get("incidents"):
+            self._alert("incident", f"Snapshot incidents: {[i.get('code') for i in snapshot['incidents']]}")
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
@@ -184,6 +208,33 @@ class PaperWorker:
             self.alerter.send(key, text)
         except Exception:  # noqa: BLE001
             log.exception("telegram alert failed")
+
+    def _maybe_heartbeat_alert(self) -> None:
+        last = self.ledger.last_heartbeat_utc()
+        if not last:
+            return
+        try:
+            age = (self.clock.now() - parse_utc(last)).total_seconds()
+        except ValueError:
+            return
+        if age > self.settings.heartbeat_miss_s:
+            self._alert("missed_heartbeat", f"Heartbeat stale by {int(age)}s")
+
+    def _maybe_daily_summary(self) -> None:
+        day = format_utc(self.clock.now())[:10]
+        key = f"daily_summary_{day}"
+        if self.ledger.recent_alert(key, 36 * 3600):
+            return
+        report = build_daily_report(self.ledger, self.clock, day)
+        text = (
+            f"Daily paper summary {day}: trades={report['trades_count']} "
+            f"net_pnl_usdt_micro={report['net_pnl_usdt_micro']} "
+            f"halts={len(report['halts'])} halt={report['entry_halt']}"
+        )
+        result = self.alerter.send(key, text)
+        if result.get("skipped") and result.get("reason") == "disabled":
+            self.ledger.record_alert(key)
+
 
 
 # typing helper for quotes dict in except path
