@@ -1,0 +1,34 @@
+app = "ton-gram-paper"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  TON_GRAM_HOST = "0.0.0.0"
+  TON_GRAM_PORT = "43177"
+  TON_GRAM_DATA_DIR = "/data"
+  TON_GRAM_NETWORK = "mainnet"
+
+[http_service]
+  internal_port = 43177
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 50
+    soft_limit = 25
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "5s"
+
+[mounts]
+  source = "gram_paper"
+  destination = "/data"

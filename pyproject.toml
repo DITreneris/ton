@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ton-gram-paper"
+version = "1.0.0"
+description = "Paper-mode only GRAM <-> USD₮ worker on one STON.fi v2 TON mainnet route"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "TON GRAM paper worker" }]
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "jsonschema>=4.23",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+]
+
+[project.scripts]
+ton-gram = "ton_gram.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ton_gram = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
