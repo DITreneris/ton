@@ -123,6 +123,20 @@ CREATE TABLE IF NOT EXISTS daily_reports (
     created_at_utc TEXT NOT NULL,
     payload_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS feed_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    as_of_utc TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    latency_ms INTEGER,
+    quote_age_ms INTEGER
+);
+CREATE TABLE IF NOT EXISTS halt_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    as_of_utc TEXT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT NOT NULL
+);
 """
 
 
@@ -151,6 +165,8 @@ class Ledger:
             "halt_reason": "",
             "recovered": "0",
             "seq": "0",
+            "last_heartbeat_utc": "",
+            "gas_profile_json": "",
         }
         for key, value in defaults.items():
             self.conn.execute(
@@ -211,10 +227,20 @@ class Ledger:
     def latch_halt(self, reason: HaltReason | str) -> None:
         self.set_control("entry_halt", "1")
         self.set_control("halt_reason", str(reason))
+        self.conn.execute(
+            "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
+            (format_utc(self.clock.now()), "latch", str(reason)),
+        )
+        self.conn.commit()
 
     def rearm(self) -> None:
         self.set_control("entry_halt", "0")
         self.set_control("halt_reason", "")
+        self.conn.execute(
+            "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
+            (format_utc(self.clock.now()), "rearm", ""),
+        )
+        self.conn.commit()
 
     def ingest_event(self, event_id: str, kind: str, payload: dict[str, Any]) -> bool:
         try:
@@ -601,10 +627,69 @@ class Ledger:
 
     def record_alert(self, alert_key: str) -> None:
         self.conn.execute(
-            "INSERT INTO alerts(alert_key, sent_at_utc) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO alerts(alert_key, sent_at_utc) VALUES (?, ?)",
             (alert_key, format_utc(self.clock.now())),
         )
         self.conn.commit()
+
+    def record_heartbeat(self) -> None:
+        self.set_control("last_heartbeat_utc", format_utc(self.clock.now()))
+
+    def last_heartbeat_utc(self) -> str:
+        return self.get_control("last_heartbeat_utc")
+
+    def record_feed_samples(self, feed_health: dict[str, Any], quote_age_ms: int | None) -> None:
+        now = format_utc(self.clock.now())
+        for name, health in feed_health.items():
+            self.conn.execute(
+                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?, ?)",
+                (
+                    now,
+                    name,
+                    str((health or {}).get("status") or "UNKNOWN"),
+                    (health or {}).get("latency_ms"),
+                    quote_age_ms,
+                ),
+            )
+        self.conn.commit()
+
+    def save_gas_profile(self, profile: dict[str, Any]) -> None:
+        self.set_control("gas_profile_json", _json(profile))
+
+    def load_gas_profile(self) -> dict[str, Any] | None:
+        raw = self.get_control("gas_profile_json")
+        if not raw:
+            return None
+        return json.loads(raw)
+
+    def get_intent(self, intent_id: str) -> Intent | None:
+        row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
+        return _intent_from_row(row) if row else None
+
+    def fills_for_intent(self, intent_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM fills WHERE intent_id = ?", (intent_id,)).fetchall()
+        return [dict(row) | {"payload": json.loads(row["payload_json"])} for row in rows]
+
+    def halt_events_for_day(self, day_utc: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM halt_events WHERE as_of_utc LIKE ? ORDER BY as_of_utc",
+            (f"{day_utc}%",),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def feed_samples_for_day(self, day_utc: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM feed_samples WHERE as_of_utc LIKE ?",
+            (f"{day_utc}%",),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def quote_ages_ms_for_day(self, day_utc: str) -> list[int]:
+        rows = self.conn.execute(
+            "SELECT quote_age_ms FROM feed_samples WHERE as_of_utc LIKE ? AND quote_age_ms IS NOT NULL",
+            (f"{day_utc}%",),
+        ).fetchall()
+        return [int(row["quote_age_ms"]) for row in rows]
 
 
 def _quote_from_payload(payload: dict[str, Any]) -> Quote:
