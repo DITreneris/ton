@@ -43,6 +43,7 @@ def test_worker_snapshot_exposes_measured_cost_model(settings, clock, ledger):
 
 def test_reset_paper_restores_starting_balances(settings, clock, ledger):
     ledger.latch_halt(HaltReason.OPERATOR)
+    ledger.save_strategy_state({"mids": [1_160_000], "cycles_since_signal": 4, "seq": 1})
     before = ledger.get_position()
     ledger.conn.execute(
         "UPDATE positions SET gram_nano=1, usdt_micro=1, realized_pnl_usdt_micro=-50 WHERE id=1"
@@ -57,6 +58,7 @@ def test_reset_paper_restores_starting_balances(settings, clock, ledger):
     assert pos.reserved_usdt_micro == 0
     assert ledger.entry_halt is False
     assert ledger.counts()["fills"] == 0
+    assert ledger.load_strategy_state() in (None, {})
     from ton_gram.clock import format_utc
 
     events = ledger.halt_events_for_day(format_utc(clock.now())[:10])
