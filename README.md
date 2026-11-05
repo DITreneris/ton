@@ -80,7 +80,6 @@ python -m ton_gram rearm
 python -m ton_gram reset-paper
 python -m ton_gram validate-result path/to/MONITOR_RESULT.json --snapshot-json artifacts/sample_snapshot.json
 pytest
-bash scripts/check-image.sh   # docker build + bundled profile smoke; required before push
 ```
 
 ## Snapshot endpoint shape
@@ -111,7 +110,7 @@ bash scripts/check-image.sh   # docker build + bundled profile smoke; required b
 
 ## Gas refund measurement
 
-`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image ships `src/ton_gram/data/gas_profile.json` as package data (`.dockerignore` excludes host `artifacts/`; do not `COPY` that directory). Run `bash scripts/check-image.sh` before every push so Railway never sees a COPY/.dockerignore mismatch.
+`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image ships `src/ton_gram/data/gas_profile.json` as package data (`.dockerignore` excludes host `artifacts/`; do not `COPY` that directory).
 
 ## Recovery drills
 
@@ -141,11 +140,31 @@ curl -X POST -H "Authorization: Bearer $TON_GRAM_SNAPSHOT_BEARER_TOKEN" \
   https://YOUR-RAILWAY-HOST/v1/control/reset
 ```
 
+## Railway control (live paper latch)
+
+Local `python -m ton_gram halt` / `rearm` / `reset-paper` write the **local** SQLite. They do not move the Railway volume latch.
+
+```bash
+export HOST=https://ton-gram-worker-production.up.railway.app
+export TOKEN="$TON_GRAM_SNAPSHOT_BEARER_TOKEN"
+
+curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/report/daily"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/halt"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/rearm"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/reset"
+```
+
+Do not rearm until you know why the halt latched. Isolated drills (`TON_GRAM_DRILL_TOKEN` + `/v1/drill/all`) use `drill.sqlite3` and leave paper equity untouched.
+
+If a snapshot bearer was ever pasted into chat, rotate it on Railway and treat the old value as burned.
+
 ## Telegram
 
-Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Alerts are deduplicated per key for `TON_GRAM_TELEGRAM_DEDUPE_S` seconds (default 1 hour). There is no inbound Telegram command surface.
+Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Alerts are deduplicated per key for `TON_GRAM_TELEGRAM_DEDUPE_S` seconds (default 1 hour). There is no inbound Telegram command surface (`/status`, `/profit`, `/stop` do nothing).
 
-Keys that fire: `halt`, `incident`, `scope_fail`, `feed_down`, `missed_heartbeat`, `daily_summary_YYYY-MM-DD`. Send one uncapped test message with `python -m ton_gram telegram-test`.
+One daily performance card is sent on the first successful cycle at or after `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6**, 08:00 Europe/Vilnius in winter). The success key is `daily_summary_sent_YYYY-MM-DD`. A failed send does not burn the day. Critical `halt` cards cover sticky reasons only (`OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`). A stale quote rejects the candidate; it does not latch halt.
+
+Other keys: `incident`, `scope_fail`, `feed_down`, `missed_heartbeat`. Send one uncapped test message with `python -m ton_gram telegram-test`.
 
 ## 24/7 on a small VPS / Fly / Railway
 
@@ -178,13 +197,13 @@ Use the included `fly.toml` (`internal_port = 43177`, volume mounted at `/data`)
 
 Create a service from this repo, set the same env vars, and attach a **Railway volume** at `/data` (do not rely on a Dockerfile `VOLUME`). The worker listens on Railway's `PORT` when `TON_GRAM_PORT` is unset. Health check: `GET /healthz`.
 
-Backup `data/paper.sqlite3` regularly. This is the only durable store. Drills write `data/drill.sqlite3` and never open the paper file.
+Backup `data/paper.sqlite3` regularly. This is the only durable store.
 
 ## Baseline strategy
 
 Deterministic mid-deviation fade:
 
-1. Mid = average implied USD₮-micro per GRAM from both pinned quotes.
+1. Mid = average implied USD₮-micro per GRAM from both pinned quotes. The USD₮→GRAM simulate uses the USD₮ ask from the 1 GRAM leg so both notionals match. If `|mid_g2u − mid_u2g|` exceeds `TON_GRAM_MID_SPREAD_MAX_BPS` (default 15), the cycle skips (`skip=spread`) and does not emit a candidate.
 2. After `STRATEGY_LOOKBACK` samples, compare mid to SMA.
 3. If `|deviation| >= STRATEGY_ENTRY_DEVIATION_BPS`, emit a timestamped candidate fading the move.
 4. Risk must still approve it. Out-of-policy size, stale quotes, halt, or failed scope produce **zero intents**.
