@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     quote_offer_gram_nano: int = GRAM_SCALE  # 1 GRAM
     quote_offer_usdt_micro: int = 10 * USDT_SCALE  # fallback if GRAM→USD₮ ask is missing
     simulate_slippage_tolerance: str = "0.01"
-    mid_spread_max_bps: int = 15
+    mid_spread_max_bps: int = 200  # broken book only; healthy bid/ask is ~2x pool fee
     daily_summary_hour_utc: int = 6  # 08:00 Europe/Vilnius in winter
 
     strategy_lookback: int = 8
