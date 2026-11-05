@@ -642,7 +642,7 @@ class Ledger:
         now = format_utc(self.clock.now())
         for name, health in feed_health.items():
             self.conn.execute(
-                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?)",
                 (
                     now,
                     name,
@@ -690,6 +690,49 @@ class Ledger:
             (f"{day_utc}%",),
         ).fetchall()
         return [int(row["quote_age_ms"]) for row in rows]
+
+    def reset_paper(self, reason: str = "OPERATOR") -> dict[str, Any]:
+        """Return paper balances to genesis. Does not touch drill.sqlite3."""
+        now = format_utc(self.clock.now())
+        mid = 0
+        quotes = self.latest_quotes()
+        if quotes:
+            sample = next(iter(quotes.values()))
+            mid = sample.usdt_per_gram_micro
+        gram = self.settings.paper_gram_nano
+        usdt = self.settings.paper_usdt_micro
+        equity = mark_usdt_micro(gram, usdt, mid)
+        for table in ("fills", "intents", "candidates", "risk_decisions", "events", "daily_reports"):
+            self.conn.execute(f"DELETE FROM {table}")
+        self.conn.execute(
+            """
+            UPDATE positions SET
+                as_of_utc=?, gram_nano=?, usdt_micro=?, reserved_usdt_micro=0,
+                equity_usdt_micro=?, peak_equity_usdt_micro=?, daily_pnl_usdt_micro=0,
+                realized_pnl_usdt_micro=0, day_utc=?
+            WHERE id = 1
+            """,
+            (now, gram, usdt, equity, equity, now[:10]),
+        )
+        self.set_control("entry_halt", "0")
+        self.set_control("halt_reason", "")
+        self.set_control("recovered", "0")
+        self.conn.execute(
+            "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
+            (now, "reset", reason),
+        )
+        self.conn.commit()
+        return {
+            "reset": True,
+            "reason": reason,
+            "as_of_utc": now,
+            "gram_nano": gram,
+            "usdt_micro": usdt,
+            "equity_usdt_micro": equity,
+            "entry_halt": False,
+            "fills": 0,
+            "intents": 0,
+        }
 
 
 def _quote_from_payload(payload: dict[str, Any]) -> Quote:
