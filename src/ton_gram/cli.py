@@ -15,6 +15,7 @@ from ton_gram.clock import Clock, FrozenClock
 from ton_gram.config import Settings, reset_settings_cache
 from ton_gram.logutil import configure_logging
 from ton_gram.drill import SCENARIOS, isolated_harness, remote_run, run_all
+from ton_gram.learn import run_learn
 from ton_gram.ledger import Ledger
 from ton_gram.measure import (
     GasMeasurer,
@@ -206,6 +207,14 @@ def cmd_reset_paper(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_learn(args: argparse.Namespace) -> int:
+    _settings, clock, ledger = _boot()
+    payload = run_learn(ledger, clock, args.day)
+    print(json.dumps(payload, indent=2))
+    ledger.close()
+    return 0
+
+
 def cmd_telegram_test(args: argparse.Namespace) -> int:
     settings, clock, ledger = _boot()
     alerter = TelegramAlerter(settings, ledger)
@@ -241,6 +250,8 @@ def build_parser() -> argparse.ArgumentParser:
     drill.add_argument("--token", default="", help="TON_GRAM_DRILL_TOKEN")
     drill.add_argument("--http", action="store_true", help="exercise FastAPI drill routes in-process")
     drill.add_argument("--isolated", action="store_true", help="use a temp ledger so paper state is untouched")
+    learn = sub.add_parser("learn", help="closed loop: score the paper day and write advisory lessons")
+    learn.add_argument("--day", default=None)
     tg = sub.add_parser("telegram-test", help="send one outbound Telegram test message")
     tg.add_argument("--message", default="")
     return parser
@@ -261,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         "reset-paper": cmd_reset_paper,
         "measure-gas": cmd_measure_gas,
         "drill": cmd_drill,
+        "learn": cmd_learn,
         "telegram-test": cmd_telegram_test,
     }
     return commands[args.cmd](args)
