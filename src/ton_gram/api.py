@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock
 from ton_gram.config import Settings
+from ton_gram.drill import SCENARIOS, DrillHarness, run_all
 from ton_gram.ledger import Ledger
-from ton_gram.models import AssessmentRecordStatus, HaltReason
+from ton_gram.models import HaltReason
 from ton_gram.report import build_daily_report
 from ton_gram.validator import validate_monitor_result
 
 STATIC_DIR = Path(__file__).parent / "static"
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class MonitorResultIn(BaseModel):
@@ -29,16 +33,30 @@ class MonitorResultIn(BaseModel):
     model_config = {"extra": "allow"}
 
 
-def create_app(settings: Settings, ledger: Ledger, clock: Clock) -> FastAPI:
+def create_app(
+    settings: Settings,
+    ledger: Ledger,
+    clock: Clock,
+    alerter: TelegramAlerter | None = None,
+) -> FastAPI:
     app = FastAPI(title="TON GRAM paper snapshot", version="1.0.0")
     app.state.settings = settings
     app.state.ledger = ledger
     app.state.clock = clock
+    app.state.alerter = alerter or TelegramAlerter(settings, ledger)
+    app.state.drills = DrillHarness(settings, clock, ledger)
 
     def require_bearer(authorization: str | None = Header(default=None)) -> None:
         token = settings.snapshot_bearer_token
         if not authorization or authorization != f"Bearer {token}":
             raise HTTPException(status_code=401, detail="missing or invalid bearer token")
+
+    def require_drill(authorization: str | None = Header(default=None)) -> None:
+        token = settings.drill_token
+        if not token:
+            raise HTTPException(status_code=404, detail="drill mode disabled")
+        if not authorization or authorization != f"Bearer {token}":
+            raise HTTPException(status_code=401, detail="missing or invalid drill token")
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
@@ -50,6 +68,8 @@ def create_app(settings: Settings, ledger: Ledger, clock: Clock) -> FastAPI:
             "broadcast": False,
             "entry_halt": ledger.entry_halt,
             "has_snapshot": snap is not None,
+            "last_heartbeat_utc": ledger.last_heartbeat_utc() or None,
+            "drill_enabled": bool(settings.drill_token),
         }
 
     @app.get("/")
@@ -87,6 +107,7 @@ def create_app(settings: Settings, ledger: Ledger, clock: Clock) -> FastAPI:
             "usdt": scope.get("usdt_jetton_master"),
             "native": scope.get("native_gram_address"),
             "required_coverage": snap.get("required_coverage"),
+            "cost_model": snap.get("cost_model"),
             "evidence_ids": snap.get("evidence_ids") or [],
         }
 
@@ -120,6 +141,7 @@ def create_app(settings: Settings, ledger: Ledger, clock: Clock) -> FastAPI:
     @app.post("/v1/control/halt")
     def halt(_: None = Depends(require_bearer)) -> dict[str, Any]:
         ledger.latch_halt(HaltReason.OPERATOR)
+        app.state.alerter.send("halt", "Operator latched sticky entry halt")
         return {"entry_halt": True, "reason": "OPERATOR"}
 
     @app.post("/v1/control/rearm")
@@ -128,7 +150,22 @@ def create_app(settings: Settings, ledger: Ledger, clock: Clock) -> FastAPI:
         return {"entry_halt": False, "reason": None}
 
     @app.get("/v1/report/daily")
-    def daily(_: None = Depends(require_bearer)) -> dict[str, Any]:
-        return build_daily_report(ledger, clock)
+    def daily(
+        _: None = Depends(require_bearer),
+        date: str | None = Query(default=None, description="UTC day YYYY-MM-DD"),
+    ) -> dict[str, Any]:
+        if date and not DATE_RE.match(date):
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+        return build_daily_report(ledger, clock, date)
+
+    @app.post("/v1/drill/all")
+    def drill_all(_: None = Depends(require_drill)) -> dict[str, Any]:
+        return run_all(app.state.drills)
+
+    @app.post("/v1/drill/{scenario}")
+    def drill_one(scenario: str, _: None = Depends(require_drill)) -> dict[str, Any]:
+        if scenario not in SCENARIOS:
+            raise HTTPException(status_code=404, detail="unknown drill scenario")
+        return app.state.drills.run(scenario)
 
     return app
