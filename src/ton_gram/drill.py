@@ -1,12 +1,13 @@
 """Admin-only recovery drills. Disabled unless TON_GRAM_DRILL_TOKEN is set.
 
-Paper-only: these mutate the simulated ledger. They never sign or broadcast.
+Drills always use an isolated SQLite file (drill.sqlite3). They never write
+paper positions, PnL, the daily report, or the live halt latch.
 """
 
 from __future__ import annotations
 
-import json
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -14,6 +15,7 @@ import httpx
 from ton_gram.clock import Clock, FrozenClock, format_utc
 from ton_gram.config import Settings
 from ton_gram.ledger import Ledger
+from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import (
     Candidate,
     Direction,
@@ -222,10 +224,34 @@ class DrillHarness:
         return {"scenario": "delayed_refund", **checks}
 
 
+def drill_db_path(settings: Settings) -> Path:
+    return settings.data_dir / "drill.sqlite3"
+
+
+def _unlink_sqlite(path: Path) -> None:
+    for suffix in ("", "-wal", "-shm"):
+        candidate = Path(str(path) + suffix) if suffix else path
+        if candidate.exists():
+            candidate.unlink()
+
+
+def isolated_harness(settings: Settings, clock: Clock) -> DrillHarness:
+    """Fresh drill ledger beside the paper DB. Paper file is never opened."""
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    path = drill_db_path(settings)
+    _unlink_sqlite(path)
+    hydrate_cost_model(settings, None)
+    ledger = Ledger(settings, clock, db_path=path)
+    hydrate_cost_model(settings, ledger)
+    return DrillHarness(settings, clock, ledger)
+
+
 def run_all(harness: DrillHarness) -> dict[str, Any]:
     results = [harness.run(name) for name in SCENARIOS]
     return {
         "mode": "PAPER",
+        "namespace": "drill",
+        "paper_untouched": True,
         "signing": False,
         "broadcast": False,
         "passed": all(item.get("passed") for item in results),

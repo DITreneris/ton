@@ -11,8 +11,9 @@ from pydantic import BaseModel
 from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock
 from ton_gram.config import Settings
-from ton_gram.drill import SCENARIOS, DrillHarness, run_all
+from ton_gram.drill import SCENARIOS, isolated_harness, run_all
 from ton_gram.ledger import Ledger
+from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import HaltReason
 from ton_gram.report import build_daily_report
 from ton_gram.validator import validate_monitor_result
@@ -40,11 +41,11 @@ def create_app(
     alerter: TelegramAlerter | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TON GRAM paper snapshot", version="1.0.0")
+    hydrate_cost_model(settings, ledger)
     app.state.settings = settings
     app.state.ledger = ledger
     app.state.clock = clock
     app.state.alerter = alerter or TelegramAlerter(settings, ledger)
-    app.state.drills = DrillHarness(settings, clock, ledger)
 
     def require_bearer(authorization: str | None = Header(default=None)) -> None:
         token = settings.snapshot_bearer_token
@@ -149,6 +150,12 @@ def create_app(
         ledger.rearm()
         return {"entry_halt": False, "reason": None}
 
+    @app.post("/v1/control/reset")
+    def reset_paper(_: None = Depends(require_bearer)) -> dict[str, Any]:
+        result = ledger.reset_paper(reason="OPERATOR")
+        app.state.alerter.send("incident", "Operator reset paper ledger to starting balances")
+        return result
+
     @app.get("/v1/report/daily")
     def daily(
         _: None = Depends(require_bearer),
@@ -160,12 +167,28 @@ def create_app(
 
     @app.post("/v1/drill/all")
     def drill_all(_: None = Depends(require_drill)) -> dict[str, Any]:
-        return run_all(app.state.drills)
+        harness = isolated_harness(settings, clock)
+        try:
+            return run_all(harness)
+        finally:
+            harness.ledger.close()
 
     @app.post("/v1/drill/{scenario}")
     def drill_one(scenario: str, _: None = Depends(require_drill)) -> dict[str, Any]:
         if scenario not in SCENARIOS:
             raise HTTPException(status_code=404, detail="unknown drill scenario")
-        return app.state.drills.run(scenario)
+        harness = isolated_harness(settings, clock)
+        try:
+            result = harness.run(scenario)
+            return {
+                "mode": "PAPER",
+                "namespace": "drill",
+                "paper_untouched": True,
+                "signing": False,
+                "broadcast": False,
+                **result,
+            }
+        finally:
+            harness.ledger.close()
 
     return app
