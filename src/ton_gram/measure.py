@@ -326,3 +326,37 @@ def default_profile_path(settings: Settings) -> Path:
 
 def default_csv_path(settings: Settings) -> Path:
     return settings.data_dir / "gas_refunds.csv"
+
+
+def bundled_profile_path() -> Path:
+    return Path(__file__).resolve().parent / "data" / "gas_profile.json"
+
+
+def profile_search_paths(settings: Settings) -> list[Path]:
+    return [
+        default_profile_path(settings),
+        bundled_profile_path(),
+        Path("/app/artifacts/gas_profile.json"),
+        Path.cwd() / "artifacts" / "gas_profile.json",
+    ]
+
+
+def hydrate_cost_model(settings: Settings, ledger: Any | None = None) -> dict[str, Any] | None:
+    """Load measured gas profile into settings so snapshot/report see it on boot."""
+    profile = None
+    if ledger is not None:
+        stored = ledger.load_gas_profile()
+        if stored and (stored.get("applied") or {}).get("measured_net_cost_p90_nano"):
+            profile = stored
+    if profile is None:
+        for path in profile_search_paths(settings):
+            profile = load_profile(path)
+            if profile and (profile.get("applied") or {}).get("measured_net_cost_p90_nano"):
+                break
+            profile = None
+    if not profile:
+        return None
+    apply_profile(settings, profile)
+    if ledger is not None:
+        ledger.save_gas_profile(profile)
+    return profile
