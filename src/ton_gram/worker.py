@@ -20,7 +20,7 @@ from ton_gram.scope import verify_scope
 from ton_gram.snapshot import build_snapshot
 from ton_gram.strategy import BaselineStrategy
 from ton_gram.telegram_text import format_daily_card, format_halt_card
-from ton_gram.units import bps_delta
+from ton_gram.units import bps_delta, usdt_value_micro
 
 log = logging.getLogger("ton_gram.worker")
 
@@ -57,6 +57,13 @@ class PaperWorker:
         outcomes = self.ledger.recover()
         self.recovered = True
         log.info("recovery complete outcomes=%s halt=%s", outcomes, self.ledger.entry_halt)
+        if self.ledger.halt_reason == HaltReason.SETTLEMENT_UNKNOWN or any(
+            item.get("status") == "RECONCILED_UNKNOWN" for item in outcomes
+        ):
+            self._alert(
+                "halt",
+                format_halt_card("SETTLEMENT_UNKNOWN", "Reserved intent missing its quote on recover"),
+            )
         return outcomes
 
     def cycle(self) -> dict[str, Any]:
@@ -68,6 +75,11 @@ class PaperWorker:
         feed_health: dict[str, Any] = {}
         quotes: dict[Direction, QuoteLike] = {}
         mid = 0
+        mid_g2u = 0
+        mid_u2g = 0
+        spread_bps = None
+        wide_spread = False
+        feed_failed = False
         try:
             inputs = self.poller.fetch_scope_inputs()
             feed_health["stonfi_metadata"] = {
@@ -82,18 +94,34 @@ class PaperWorker:
             elif self.settings.enable_toncenter:
                 feed_health["toncenter"] = {"status": "DEGRADED", "latency_ms": None}
 
-            quotes = self.poller.fetch_quotes(inputs["pool"])
+            last_mid = self.strategy.mids[-1] if self.strategy.mids else 0
+            size_usdt = usdt_value_micro(self.settings.quote_offer_gram_nano, last_mid) if last_mid else None
+            quotes = self.poller.fetch_quotes(inputs["pool"], size_usdt_micro=size_usdt)
             feed_health["stonfi_quotes"] = {
                 "status": "UP",
                 "latency_ms": max(q.provider_latency_ms for q in quotes.values()),
             }
             for quote in quotes.values():
                 self.ledger.save_quote(quote)
-            mid = self.strategy.observe_mid(
-                quotes[Direction.GRAM_TO_USDT],
-                quotes[Direction.USDT_TO_GRAM],
-            )
-            self.ledger.mark_to_market(mid)
+            mid_g2u = quotes[Direction.GRAM_TO_USDT].usdt_per_gram_micro
+            mid_u2g = quotes[Direction.USDT_TO_GRAM].usdt_per_gram_micro
+            spread_bps = abs(bps_delta(mid_g2u, mid_u2g)) if mid_g2u and mid_u2g else None
+            wide_spread = spread_bps is not None and spread_bps > self.settings.mid_spread_max_bps
+            if wide_spread:
+                log.warning(
+                    "mid spread too wide g2u=%s u2g=%s spread_bps=%s max=%s; SMA unchanged",
+                    mid_g2u,
+                    mid_u2g,
+                    spread_bps,
+                    self.settings.mid_spread_max_bps,
+                )
+                mid = last_mid
+            else:
+                mid = self.strategy.observe_mid(
+                    quotes[Direction.GRAM_TO_USDT],
+                    quotes[Direction.USDT_TO_GRAM],
+                )
+                self.ledger.mark_to_market(mid)
             scope = verify_scope(
                 self.settings,
                 observed_network=inputs.get("observed_network"),
@@ -104,6 +132,7 @@ class PaperWorker:
                 quotes=[q.raw | {"router_address": q.router_address, "pool_address": q.pool_address, "router_major_version": q.router_major_version} for q in quotes.values()],
             )
         except ProviderError as exc:
+            feed_failed = True
             log.warning("provider failure: %s", exc)
             feed_health["stonfi_quotes"] = {"status": "DOWN", "latency_ms": None, "error": str(exc)}
             scope = verify_scope(self.settings)
@@ -111,7 +140,7 @@ class PaperWorker:
             self._alert("feed_down", f"Provider failure: {exc}")
             self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
 
-        if not scope.passed:
+        if not scope.passed and not feed_failed:
             self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH)
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
             self._alert("incident", "Scope verification failed closed")
@@ -122,10 +151,6 @@ class PaperWorker:
         candidate = None
         decision = None
         intent = None
-        mid_g2u = quotes[Direction.GRAM_TO_USDT].usdt_per_gram_micro if quotes else 0
-        mid_u2g = quotes[Direction.USDT_TO_GRAM].usdt_per_gram_micro if quotes else 0
-        spread_bps = abs(bps_delta(mid_g2u, mid_u2g)) if mid_g2u and mid_u2g else None
-        wide_spread = spread_bps is not None and spread_bps > self.settings.mid_spread_max_bps
         if quotes and scope.passed and not wide_spread:
             candidate = self.strategy.maybe_candidate(
                 quotes[Direction.GRAM_TO_USDT],
@@ -161,7 +186,7 @@ class PaperWorker:
                 else:
                     log.info("candidate rejected: %s", decision.reasons)
 
-        if mid:
+        if mid and not wide_spread:
             self.ledger.save_strategy_state(self.strategy.dump_state())
 
         snapshot = build_snapshot(
@@ -188,8 +213,14 @@ class PaperWorker:
         signal["mid_g2u_usdt_per_gram_micro"] = mid_g2u
         signal["mid_u2g_usdt_per_gram_micro"] = mid_u2g
         signal["mid_spread_bps"] = spread_bps
+        if intent is not None:
+            skip_bucket = "approved"
+        elif candidate is not None:
+            skip_bucket = "emitted"
+        else:
+            skip_bucket = signal["skip"]
         skip = None if candidate is not None else signal["skip"]
-        self.ledger.bump_signal_skip(format_utc(self.clock.now())[:10], skip)
+        self.ledger.bump_signal_skip(format_utc(self.clock.now())[:10], skip_bucket)
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
