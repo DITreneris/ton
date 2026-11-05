@@ -69,7 +69,9 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
     realized = int(report.get("day_realized_pnl_usdt_micro") or 0)
     rejected = report.get("rejected_candidates_by_reason") or {}
     all_in_rejects = int(rejected.get("all_in_cost") or 0) if isinstance(rejected, dict) else 0
+    daily_loss_rejects = int(rejected.get("daily_loss_limit") or 0) if isinstance(rejected, dict) else 0
     rejection_total = sum(int(v or 0) for v in rejected.values()) if isinstance(rejected, dict) else 0
+    unrealized = int(report.get("day_unrealized_pnl_usdt_micro") or 0)
 
     feed_floor = 100.0
     for stats in feeds.values() if isinstance(feeds, dict) else []:
@@ -99,6 +101,12 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "all_in_cost rejects dominate; fee+impact+50bps slip exceeded max_all_in_cost_bps "
             "(default 80). Do not lower the 25 bps entry gate to compensate"
         )
+    if halt and halt_reason == "LIMIT_BREACH" and daily_loss_rejects:
+        errors.append(
+            "LIMIT_BREACH on daily_loss_limit; marked equity of genesis paper inventory "
+            "(default 5000 GRAM) vs UTC start-of-day, not the last clip. "
+            "~20 bps of GRAM vs SOD mid is -$100 on 5k GRAM. Do not rearm to manufacture fills"
+        )
 
     score = 100
     score -= 15 * len(errors)
@@ -125,6 +133,8 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "feed_uptime_floor_pct": feed_floor if feeds else None,
             "quote_age_p90_ms": quote_p90,
             "all_in_rejects": all_in_rejects,
+            "daily_loss_rejects": daily_loss_rejects,
+            "unrealized_usdt_micro": unrealized,
             "rejection_total": rejection_total,
         },
         "rules_used": rules,
@@ -173,8 +183,20 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
                 "text": "Risk rejected on all_in_cost. Inspect fee+impact+50bps slip vs max_all_in_cost_bps=80. Do not lower 25 bps.",
             }
         )
+    if sig.get("halt_reason") == "LIMIT_BREACH" and int(sig.get("daily_loss_rejects") or 0):
+        lessons.append(
+            {
+                "id": "daily_loss_marks_inventory",
+                "severity": "high",
+                "text": (
+                    "LIMIT_BREACH on daily_loss_limit is marked genesis inventory "
+                    "(default 5000 GRAM), not a blown clip. ~20 bps of GRAM vs UTC "
+                    "start-of-day is -$100. Do not rearm to manufacture fills. Do not lower 25 bps."
+                ),
+            }
+        )
     for err in evaluation.get("errors") or []:
-        if str(err).startswith("all_in_cost"):
+        if str(err).startswith("all_in_cost") or str(err).startswith("LIMIT_BREACH on daily_loss"):
             continue
         lessons.append({"id": "error", "severity": "high", "text": err})
     for gap in evaluation.get("gaps") or []:
