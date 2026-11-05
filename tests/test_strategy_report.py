@@ -9,6 +9,21 @@ from ton_gram.strategy import BaselineStrategy
 from tests.conftest import make_quote
 
 
+def test_strategy_state_survives_restart(settings: Settings, clock: FrozenClock):
+    settings.strategy_lookback = 3
+    first = BaselineStrategy(settings, clock)
+    stable = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g0", ask_units=1_160_000)
+    stable_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u0", ask_units=8_620_000_000)
+    for _ in range(3):
+        first.observe_mid(stable, stable_u)
+    assert first.signal_view(first.mids[-1])["skip"] == "flat"
+    restarted = BaselineStrategy(settings, clock, first.dump_state())
+    view = restarted.signal_view(restarted.mids[-1])
+    assert view["skip"] == "flat"
+    assert view["samples"] == 3
+    assert list(restarted.mids) == list(first.mids)
+
+
 def test_signal_view_warming_then_flat(settings: Settings, clock: FrozenClock):
     settings.strategy_lookback = 3
     settings.strategy_entry_deviation_bps = 25
