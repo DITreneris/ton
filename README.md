@@ -87,13 +87,13 @@ pytest
 
 ## Snapshot endpoint shape
 
-`GET /v1/snapshot` returns one JSON object. `GET /v1/report/daily` returns the UTC paper day. `GET /v1/docs` returns the document index.
+`GET /v1/snapshot` returns one JSON object. `POST /v1/monitor-result` validates the Grok `MONITOR_RESULT` contract. `GET /v1/report/daily` returns the UTC paper day. `GET /v1/docs` returns the document index.
 
 ## Closed learning loop
 
 The Prompt Anatomy diagram is a full coding OS. This repo is a paper trader. Only the right-hand loop is wired here: **logs → evaluate → lessons → advisory rules**.
 
-`python -m ton_gram learn` scores the UTC paper day. Rules are advisory. No auto-apply. It will not lower the 25 bps entry gate or turn signing on.
+`python -m ton_gram learn` (or `POST /v1/learn`) scores the UTC paper day. Rules are advisory. No auto-apply. It will not lower the 25 bps entry gate or turn signing on.
 
 ## Document index and versions
 
@@ -107,4 +107,27 @@ curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/docs"
 
 Unchanged hashes are no-ops. There is no CMS, no extra database, and no auto-edit of paper policy from the learning loop.
 
-See `CHANGELOG.md` for dated history.
+## Railway control (live paper latch)
+
+Local `python -m ton_gram halt` / `rearm` / `reset-paper` write the **local** SQLite. They do not move the Railway volume latch.
+
+```bash
+export HOST=https://ton-gram-worker-production.up.railway.app
+export TOKEN="$TON_GRAM_SNAPSHOT_BEARER_TOKEN"
+
+curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/report/daily"
+curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/docs"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/halt"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/rearm"
+```
+
+If a snapshot bearer was ever pasted into chat, rotate it on Railway and treat the old value as burned.
+
+## Telegram
+
+Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Daily card at `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6** = 08:00 Europe/Vilnius in winter).
+
+## Hard constraints
+
+- No wallet mnemonic, no private key, no signer, no `sendBoc`.
+- A poisoned snapshot or malformed monitor output cannot authorize anything.
