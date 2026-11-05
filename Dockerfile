@@ -6,8 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TON_GRAM_HOST=0.0.0.0
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md CHANGELOG.md ./
 COPY src ./src
+COPY docs ./docs
 # Measured gas_profile.json is package data under src/ton_gram/data/.
 # Do not COPY artifacts/: .dockerignore excludes that directory.
 RUN pip install --no-cache-dir . \

@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     enable_toncenter: bool = True
 
     data_dir: Path = Path("data")
+    docs_dir: Path = Path("docs")
     host: str = "0.0.0.0"
     port: int = Field(default_factory=resolve_listen_port)
     snapshot_bearer_token: str = Field(default="paper-dev-token-change-me")
