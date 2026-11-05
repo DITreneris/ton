@@ -14,6 +14,7 @@ from ton_gram.api import create_app
 from ton_gram.clock import Clock, FrozenClock
 from ton_gram.config import Settings, reset_settings_cache
 from ton_gram.logutil import configure_logging
+from ton_gram.documents import DocStore
 from ton_gram.drill import SCENARIOS, isolated_harness, remote_run, run_all
 from ton_gram.learn import run_learn
 from ton_gram.ledger import Ledger
@@ -207,9 +208,41 @@ def cmd_reset_paper(args: argparse.Namespace) -> int:
     return 0
 
 
+def _docs_store() -> tuple[Settings, Clock, DocStore]:
+    settings, clock, _ledger = _boot()
+    return settings, clock, DocStore(settings.docs_dir, clock)
+
+
+def cmd_docs(args: argparse.Namespace) -> int:
+    settings, clock, store = _docs_store()
+    action = args.docs_cmd or "index"
+    if action == "sync":
+        payload = store.sync(note=args.note)
+    elif action == "publish":
+        if not args.id:
+            print("docs publish requires an id", file=sys.stderr)
+            return 2
+        payload = store.publish(f"{args.id}.md", note=args.note)
+        store.write_index()
+    elif action == "show":
+        if not args.id:
+            print("docs show requires an id", file=sys.stderr)
+            return 2
+        try:
+            payload = store.get(args.id, args.version)
+        except FileNotFoundError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        store.write_index()
+        payload = store.index()
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def cmd_learn(args: argparse.Namespace) -> int:
-    _settings, clock, ledger = _boot()
-    payload = run_learn(ledger, clock, args.day)
+    settings, clock, ledger = _boot()
+    payload = run_learn(ledger, clock, args.day, settings)
     print(json.dumps(payload, indent=2))
     ledger.close()
     return 0
@@ -252,6 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
     drill.add_argument("--isolated", action="store_true", help="use a temp ledger so paper state is untouched")
     learn = sub.add_parser("learn", help="closed loop: score the paper day and write advisory lessons")
     learn.add_argument("--day", default=None)
+    docs = sub.add_parser("docs", help="lean document index, versions, and changelog")
+    docs.add_argument("docs_cmd", nargs="?", default="index", choices=["index", "sync", "publish", "show"])
+    docs.add_argument("id", nargs="?", default="")
+    docs.add_argument("--version", type=int, default=None)
+    docs.add_argument("--note", default="")
     tg = sub.add_parser("telegram-test", help="send one outbound Telegram test message")
     tg.add_argument("--message", default="")
     return parser
@@ -273,6 +311,7 @@ def main(argv: list[str] | None = None) -> int:
         "measure-gas": cmd_measure_gas,
         "drill": cmd_drill,
         "learn": cmd_learn,
+        "docs": cmd_docs,
         "telegram-test": cmd_telegram_test,
     }
     return commands[args.cmd](args)
