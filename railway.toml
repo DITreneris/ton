@@ -6,6 +6,3 @@ dockerfilePath = "Dockerfile"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 10
 restartPolicyType = "ON_FAILURE"
-
-[service]
-internalPort = 43177
