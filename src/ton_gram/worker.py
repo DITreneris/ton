@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
-from pathlib import Path
 from typing import Any
 
 from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock, format_utc, parse_utc
 from ton_gram.config import Settings
 from ton_gram.ledger import Ledger
-from ton_gram.measure import apply_profile, default_profile_path, load_profile
+from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import Direction, HaltReason, RiskVerdict
 from ton_gram.poller import MarketPoller, ProviderError
 from ton_gram.report import build_daily_report
@@ -46,13 +44,7 @@ class PaperWorker:
         self._load_cost_profile()
 
     def _load_cost_profile(self) -> None:
-        profile = self.ledger.load_gas_profile() or load_profile(default_profile_path(self.settings))
-        if not profile:
-            bundled = Path(__file__).resolve().parents[2] / "artifacts" / "gas_profile.json"
-            profile = load_profile(bundled)
-        if profile:
-            apply_profile(self.settings, profile)
-            self.ledger.save_gas_profile(profile)
+        hydrate_cost_model(self.settings, self.ledger)
 
     def close(self) -> None:
         self.poller.close()
