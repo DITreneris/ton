@@ -51,6 +51,11 @@ def _skip_total(skips: dict[str, Any]) -> int:
     return sum(int(skips.get(k) or 0) for k in ("warming", "flat", "cooldown", "spread", "emitted", "approved", "fired"))
 
 
+def inventory_mark_dominates(realized_usdt_micro: int, unrealized_usdt_micro: int) -> bool:
+    """True when marked inventory, not realized clips, is the daily-loss driver."""
+    return unrealized_usdt_micro < 0 and unrealized_usdt_micro <= realized_usdt_micro
+
+
 def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None = None) -> dict[str, Any]:
     """Score one UTC day. Deterministic. This is the Evaluation box."""
     rules = rules or dict(PINNED_RULES)
@@ -100,12 +105,6 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
         errors.append(
             "all_in_cost rejects dominate; fee+impact+50bps slip exceeded max_all_in_cost_bps "
             "(default 80). Do not lower the 25 bps entry gate to compensate"
-        )
-    if halt and halt_reason == "LIMIT_BREACH" and daily_loss_rejects:
-        errors.append(
-            "LIMIT_BREACH on daily_loss_limit; marked equity of genesis paper inventory "
-            "(default 5000 GRAM) vs UTC start-of-day, not the last clip. "
-            "~20 bps of GRAM vs SOD mid is -$100 on 5k GRAM. Do not rearm to manufacture fills"
         )
 
     score = 100
@@ -183,20 +182,29 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
                 "text": "Risk rejected on all_in_cost. Inspect fee+impact+50bps slip vs max_all_in_cost_bps=80. Do not lower 25 bps.",
             }
         )
-    if sig.get("halt_reason") == "LIMIT_BREACH" and int(sig.get("daily_loss_rejects") or 0):
+    if (
+        sig.get("halt_reason") == "LIMIT_BREACH"
+        and int(sig.get("daily_loss_rejects") or 0)
+        and inventory_mark_dominates(
+            int(sig.get("realized_usdt_micro") or 0),
+            int(sig.get("unrealized_usdt_micro") or 0),
+        )
+    ):
         lessons.append(
             {
                 "id": "daily_loss_marks_inventory",
                 "severity": "high",
                 "text": (
                     "LIMIT_BREACH on daily_loss_limit is marked genesis inventory "
-                    "(default 5000 GRAM), not a blown clip. ~20 bps of GRAM vs UTC "
-                    "start-of-day is -$100. Do not rearm to manufacture fills. Do not lower 25 bps."
+                    "(default 5000 GRAM), not a blown clip. $100 is ~$0.02/GRAM "
+                    "(~170 bps at $1.16). Risk only sees this on the next candidate; "
+                    "flat cycles can sit under the floor with halt=false. "
+                    "Do not rearm to manufacture fills. Do not lower 25 bps."
                 ),
             }
         )
     for err in evaluation.get("errors") or []:
-        if str(err).startswith("all_in_cost") or str(err).startswith("LIMIT_BREACH on daily_loss"):
+        if str(err).startswith("all_in_cost"):
             continue
         lessons.append({"id": "error", "severity": "high", "text": err})
     for gap in evaluation.get("gaps") or []:
