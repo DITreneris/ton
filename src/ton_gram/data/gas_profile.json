@@ -1,0 +1,81 @@
+{
+  "as_of_utc": "2026-11-05T05:05:33Z",
+  "source": "measured",
+  "pool": "EQCGScrZe1xbyWqWDvdI6mzP-GAcAWFv6ZXuaJOuSqemxku4",
+  "router": "EQCS4UEa5UaJLzOyyKieqQOQ2P9M-7kXpkO5HnP3Bv250cN3",
+  "sample_n": 107,
+  "directions": {
+    "GRAM_TO_USDT": 90,
+    "USDT_TO_GRAM": 17
+  },
+  "by_direction": {
+    "GRAM_TO_USDT": {
+      "n": 90,
+      "net_cost_gram_nano": {
+        "n": 90,
+        "median": 6983489,
+        "p90": 6993123,
+        "max": 35156486
+      },
+      "latency_s": {
+        "n": 90.0,
+        "median": 0.0,
+        "p90": 0.0,
+        "max": 1.0
+      }
+    },
+    "USDT_TO_GRAM": {
+      "n": 17,
+      "net_cost_gram_nano": {
+        "n": 17,
+        "median": 210480397,
+        "p90": 240685738,
+        "max": 240685738
+      },
+      "latency_s": {
+        "n": 17.0,
+        "median": 0.0,
+        "p90": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "attached_gram_nano": {
+    "n": 107,
+    "median": 311000000,
+    "p90": 104676000000,
+    "max": 3792822500000
+  },
+  "refund_gram_nano": {
+    "n": 107,
+    "median": 303016511,
+    "p90": 814916520,
+    "max": 2670055782
+  },
+  "net_cost_gram_nano": {
+    "n": 107,
+    "median": 6983489,
+    "p90": 210479331,
+    "max": 240685738
+  },
+  "latency_s": {
+    "n": 107.0,
+    "median": 0.0,
+    "p90": 0.0,
+    "max": 1.0
+  },
+  "applied": {
+    "delay_stress_s": 3,
+    "delay_adverse_bps": 2,
+    "measured_net_cost_p90_nano": 210479331,
+    "network_cost_gram_nano": 263099163,
+    "network_cost_stress_margin_bps": 2500,
+    "latency_stress_margin_s": 2
+  },
+  "notes": [
+    "Attached GRAM is the first outbound from the user wallet (pton_ton_transfer or jetton_transfer).",
+    "Refund is the sum of excess messages back to the user wallet.",
+    "Net cost = attached - refund - native offer (GRAM->USDT only). Combined p90 is dominated by USDT->GRAM gas attach.",
+    "Latency is first-trace utime to last-trace utime (TonAPI whole seconds; most swaps finish in the same second)."
+  ]
+}

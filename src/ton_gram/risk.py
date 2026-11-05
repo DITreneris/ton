@@ -14,7 +14,7 @@ from ton_gram.models import (
     RiskVerdict,
     ScopeVerification,
 )
-from ton_gram.units import apply_bps, gram_from_usdt, usdt_per_gram_micro
+from ton_gram.units import apply_bps, gram_from_usdt, usdt_value_micro
 
 
 def quote_age_ms(quote: Quote, clock: Clock) -> int:
@@ -26,7 +26,7 @@ def notional_usdt_micro(candidate: Candidate, quote: Quote) -> int:
     if candidate.direction is Direction.USDT_TO_GRAM:
         return candidate.offer_units
     mid = quote.usdt_per_gram_micro or candidate.mid_usdt_per_gram_micro
-    return usdt_per_gram_micro(candidate.offer_units, mid)
+    return usdt_value_micro(candidate.offer_units, mid)
 
 
 def evaluate_risk(
