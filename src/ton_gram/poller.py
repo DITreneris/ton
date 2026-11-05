@@ -233,15 +233,18 @@ class MarketPoller:
             "toncenter": toncenter_payload,
         }
 
-    def fetch_quotes(self, pool: dict[str, Any]) -> dict[Direction, Quote]:
+    def fetch_quotes(self, pool: dict[str, Any], size_usdt_micro: int | None = None) -> dict[Direction, Quote]:
         stamp = format_utc(self.clock.now()).replace(":", "").replace("-", "")
         gram_to_usdt = self.ston.simulate_swap(
             NATIVE_GRAM_ADDRESS,
             OFFICIAL_USDT_JETTON_MASTER,
             self.settings.quote_offer_gram_nano,
         )
-        implied_usdt = require_int("ask_units", gram_to_usdt.get("ask_units") or 0)
-        usdt_offer = implied_usdt if implied_usdt > 0 else self.settings.quote_offer_usdt_micro
+        # Size from last mid (same notional), never from the GRAM ask — that would
+        # compare bid to ask and look like a 2x-fee "spread" on a healthy book.
+        usdt_offer = int(size_usdt_micro or 0)
+        if usdt_offer <= 0:
+            usdt_offer = self.settings.quote_offer_usdt_micro
         usdt_to_gram = self.ston.simulate_swap(
             OFFICIAL_USDT_JETTON_MASTER,
             NATIVE_GRAM_ADDRESS,
