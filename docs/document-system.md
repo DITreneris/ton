@@ -9,6 +9,8 @@ Lean index, per-document versions, one changelog. No CMS, no database, no model 
 - `docs/INDEX.md` — generated human index
 - `docs/versions/<id>/vN.md` — immutable snapshot of that version
 - `CHANGELOG.md` — dated document (and project) history
+- `ROADMAP.md` (repo root) and `docs/roadmap.md` — the same 2026–2027 plan. Edit both together. The catalog versions `docs/roadmap.md` only.
+- `docs/lessons.md` — reusable operator lessons (the skills box). File a new id here, then `docs sync`.
 
 ## Commands
 
