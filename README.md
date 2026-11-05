@@ -80,6 +80,7 @@ python -m ton_gram rearm
 python -m ton_gram reset-paper
 python -m ton_gram validate-result path/to/MONITOR_RESULT.json --snapshot-json artifacts/sample_snapshot.json
 pytest
+bash scripts/check-image.sh   # docker build + bundled profile smoke; required before push
 ```
 
 ## Snapshot endpoint shape
@@ -110,7 +111,7 @@ pytest
 
 ## Gas refund measurement
 
-`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image copies `artifacts/` and ships `src/ton_gram/data/gas_profile.json` as package data so boot hydrates `cost_model.source=measured` even after `pip install`.
+`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image ships `src/ton_gram/data/gas_profile.json` as package data (`.dockerignore` excludes host `artifacts/`; do not `COPY` that directory). Run `bash scripts/check-image.sh` before every push so Railway never sees a COPY/.dockerignore mismatch.
 
 ## Recovery drills
 
@@ -151,7 +152,7 @@ Keys that fire: `halt`, `incident`, `scope_fail`, `feed_down`, `missed_heartbeat
 Docker image is self-contained. The Dockerfile does **not** declare `VOLUME` (Railway rejects that instruction). Persist `/data` yourself so the SQLite ledger, halt latch, and snapshots survive restarts: use `docker run -v` locally, or attach a Railway volume at `/data`.
 
 ```bash
-docker build -t ton-gram-paper .
+bash scripts/check-image.sh   # docker build + bundled profile smoke
 docker run -d --name ton-gram-paper --restart unless-stopped \
   -p 43177:43177 \
   -v gram-paper:/data \
