@@ -19,6 +19,8 @@ from ton_gram.risk import evaluate_risk, quote_age_ms, should_latch_halt
 from ton_gram.scope import verify_scope
 from ton_gram.snapshot import build_snapshot
 from ton_gram.strategy import BaselineStrategy
+from ton_gram.telegram_text import format_daily_card, format_halt_card
+from ton_gram.units import bps_delta
 
 log = logging.getLogger("ton_gram.worker")
 
@@ -107,20 +109,24 @@ class PaperWorker:
             scope = verify_scope(self.settings)
             self.ledger.latch_halt(HaltReason.HARD_HALT)
             self._alert("feed_down", f"Provider failure: {exc}")
-            self._alert("halt", "Sticky halt after feed down")
+            self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
 
         if not scope.passed:
             self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH)
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
             self._alert("incident", "Scope verification failed closed")
-            self._alert("halt", "Sticky halt after scope fail")
+            self._alert("halt", format_halt_card("SCOPE_MISMATCH", f"Scope failed closed: {scope.status}"))
 
         self.ledger.settle_due_intents(mid or 0)
 
         candidate = None
         decision = None
         intent = None
-        if quotes and scope.passed:
+        mid_g2u = quotes[Direction.GRAM_TO_USDT].usdt_per_gram_micro if quotes else 0
+        mid_u2g = quotes[Direction.USDT_TO_GRAM].usdt_per_gram_micro if quotes else 0
+        spread_bps = abs(bps_delta(mid_g2u, mid_u2g)) if mid_g2u and mid_u2g else None
+        wide_spread = spread_bps is not None and spread_bps > self.settings.mid_spread_max_bps
+        if quotes and scope.passed and not wide_spread:
             candidate = self.strategy.maybe_candidate(
                 quotes[Direction.GRAM_TO_USDT],
                 quotes[Direction.USDT_TO_GRAM],
@@ -147,7 +153,7 @@ class PaperWorker:
                 self.ledger.save_decision(decision)
                 if should_latch_halt(decision):
                     self.ledger.latch_halt(HaltReason.LIMIT_BREACH)
-                    self._alert("halt", f"Risk latched halt: {decision.reasons}")
+                    self._alert("halt", format_halt_card("LIMIT_BREACH", f"Risk latched halt: {decision.reasons}"))
                     self._alert("incident", f"Limit incident: {decision.reasons}")
                 if decision.verdict is RiskVerdict.APPROVE:
                     intent = self.ledger.create_paper_intent(candidate, quote, decision)
@@ -177,6 +183,13 @@ class PaperWorker:
         if snapshot.get("incidents"):
             self._alert("incident", f"Snapshot incidents: {[i.get('code') for i in snapshot['incidents']]}")
         signal = self.strategy.signal_view(mid)
+        if wide_spread:
+            signal["skip"] = "spread"
+        signal["mid_g2u_usdt_per_gram_micro"] = mid_g2u
+        signal["mid_u2g_usdt_per_gram_micro"] = mid_u2g
+        signal["mid_spread_bps"] = spread_bps
+        skip = None if candidate is not None else signal["skip"]
+        self.ledger.bump_signal_skip(format_utc(self.clock.now())[:10], skip)
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
@@ -184,12 +197,15 @@ class PaperWorker:
             "intent_id": intent.intent_id if intent else None,
             "halt": self.ledger.entry_halt,
             "mid_usdt_per_gram_micro": mid,
-            "skip": None if candidate is not None else signal["skip"],
+            "skip": skip,
             "samples": signal["samples"],
             "lookback": signal["lookback"],
             "deviation_bps": signal["deviation_bps"],
             "threshold_bps": signal["threshold_bps"],
             "sma_usdt_per_gram_micro": signal["sma_usdt_per_gram_micro"],
+            "mid_g2u_usdt_per_gram_micro": mid_g2u,
+            "mid_u2g_usdt_per_gram_micro": mid_u2g,
+            "mid_spread_bps": spread_bps,
         }
 
     def run_forever(self) -> None:
@@ -243,7 +259,10 @@ class PaperWorker:
             self._alert("missed_heartbeat", f"Heartbeat stale by {int(age)}s")
 
     def _maybe_daily_summary(self) -> None:
-        day = format_utc(self.clock.now())[:10]
+        now = self.clock.now()
+        if now.hour < self.settings.daily_summary_hour_utc:
+            return
+        day = format_utc(now)[:10]
         key = f"daily_summary_sent_{day}"
         if self.ledger.recent_alert(key, 36 * 3600):
             return
@@ -252,11 +271,7 @@ class PaperWorker:
         except Exception:  # noqa: BLE001
             log.exception("daily report failed")
             return
-        text = (
-            f"Daily paper summary {day}: trades={report['trades_count']} "
-            f"net_pnl_usdt_micro={report['net_pnl_usdt_micro']} "
-            f"halts={len(report['halts'])} halt={report['entry_halt']}"
-        )
+        text = format_daily_card(report, funding_cap_usdt_micro=self.settings.funding_cap_usdt_micro)
         try:
             result = self.alerter.send(key, text)
         except Exception:  # noqa: BLE001
