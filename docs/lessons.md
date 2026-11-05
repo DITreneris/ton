@@ -12,13 +12,15 @@ Same day **15:25–15:34 Europe/Vilnius**: still `scope=PASS`, spread **20 bps**
 
 ## daily_loss_marks_inventory
 
-`daily_loss_limit` marks the **whole paper wallet** (genesis 5 000 GRAM + 5 000 USD₮), not the last clip. Floor is 1% of the $10k funding cap = **$100**. On 5 000 GRAM that is about **20 bps** of GRAM vs the UTC start-of-day mark.
+`daily_loss_limit` marks the **whole paper wallet** (genesis 5 000 GRAM + 5 000 USD₮), not the last clip. Floor is 1% of the $10k funding cap = **$100** = **~$0.02 / GRAM**. At `$1.16` that is about **170 bps**, not 20. A 20 000-micro mid tick is $0.02; relative to price it is ~170 bps.
 
-A sticky `LIMIT_BREACH` after `candidate rejected: ['daily_loss_limit']` is inventory mark. Do not treat it as a blown $1 fade. Do not rearm to manufacture the next fill. Do not lower 25 bps. Do not raise the all-in cap.
+Risk only evaluates this when a **candidate** exists. Flat cycles can sit under −$100 with `halt=false`. The next 25 bps print is what latches `LIMIT_BREACH`.
 
-Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~ **200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap.
+A sticky halt after `candidate rejected: ['daily_loss_limit']` is inventory mark when unrealized PnL is the loss driver. Do not treat it as a blown $1 fade. Do not rearm to manufacture the next fill. Do not lower 25 bps. Do not raise the all-in cap.
 
-Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so 20 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
+Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~ **200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
+
+Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so ~170 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
 
 ## audit_fills_after_costs
 

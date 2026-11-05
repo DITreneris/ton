@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_utc": "2026-11-05T08:57:45Z",
+  "updated_utc": "2026-11-05T14:17:36Z",
   "documents": [
     {
       "id": "document-system",
@@ -15,27 +15,27 @@
       "id": "learning-loop",
       "title": "Learning loop",
       "path": "learning-loop.md",
-      "version": 3,
-      "sha256": "7f48af97f46f79181d10e206edec493e0ec8b084e67413d74c0b5a5236c3476c",
-      "updated_utc": "2026-11-05T08:57:45Z",
+      "version": 5,
+      "sha256": "a549cfa06df37341e56b469287b4e333a9a3c71df7cf89e500f6abe3f273a60c",
+      "updated_utc": "2026-11-05T14:17:36Z",
       "status": "current"
     },
     {
       "id": "lessons",
       "title": "Operator lessons",
       "path": "lessons.md",
-      "version": 1,
-      "sha256": "4c6300641603a4d4135fc2b343b99892efd4b79bcec42d6e52ac1a509dc95590",
-      "updated_utc": "2026-11-05T08:57:45Z",
+      "version": 3,
+      "sha256": "ae73ffe4cbc1f1785188bd795e219a28ad1569cfaa609418bd39f01fa37e4afe",
+      "updated_utc": "2026-11-05T14:17:36Z",
       "status": "current"
     },
     {
       "id": "paper-policy",
       "title": "Paper policy",
       "path": "paper-policy.md",
-      "version": 3,
-      "sha256": "1de89755768cab2ff7734a20630ba9a1ba369206501e39ce8c7cd31c129ded4a",
-      "updated_utc": "2026-11-05T08:41:10Z",
+      "version": 5,
+      "sha256": "c804c750c2fe9362f54e06b55d4fb252421f6281abf3ea30c5994e0c5c03a477",
+      "updated_utc": "2026-11-05T14:17:36Z",
       "status": "current"
     },
     {
@@ -51,9 +51,9 @@
       "id": "roadmap",
       "title": "ROADMAP \u2014 self-sustaining profitable TON GRAM bot",
       "path": "roadmap.md",
-      "version": 2,
-      "sha256": "61a8b0958fa47e55fc7d46e2a274758f03c758968dbd009613b5602b557f8f7a",
-      "updated_utc": "2026-11-05T08:41:10Z",
+      "version": 4,
+      "sha256": "1d17d096b8c123e5c40fd4c95d5711059520db778a44b6d6c9369cc1e80bd631",
+      "updated_utc": "2026-11-05T14:17:36Z",
       "status": "current"
     }
   ]
