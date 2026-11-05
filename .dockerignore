@@ -9,6 +9,8 @@ data
 agent-tools
 uploads
 tests
+# Host-only measurement dumps. The image uses package data
+# src/ton_gram/data/gas_profile.json — do not COPY artifacts/.
 artifacts
 *.md
 !README.md
