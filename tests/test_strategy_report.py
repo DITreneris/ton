@@ -236,7 +236,8 @@ def test_daily_report_http_on_populated_ledger(settings: Settings, clock: Frozen
     assert "day_realized_pnl_usdt_micro" in body
     assert "day_unrealized_pnl_usdt_micro" in body
     assert body["day_realized_pnl_usdt_micro"] == body["net_pnl_usdt_micro"]
-    assert body["signal_skips"]["fired"] == 0
+    assert body["signal_skips"]["emitted"] == 0
+    assert body["signal_skips"]["approved"] == 0
     trade = body["trades"][0]
     assert "all_in_cost_bps" in trade
     assert "slippage_bps" in trade
