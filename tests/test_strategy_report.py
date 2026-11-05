@@ -117,9 +117,12 @@ def test_daily_report(settings: Settings, clock: FrozenClock, ledger):
     assert report["trades"] == []
     assert report["gross_pnl_usdt_micro"] == 0
     assert report["net_pnl_usdt_micro"] == 0
+    assert report["day_realized_pnl_usdt_micro"] == 0
+    assert report["day_unrealized_pnl_usdt_micro"] == report["position"]["daily_pnl_usdt_micro"]
     assert report["rejected_candidates_by_reason"] == {}
     assert "quote_age" in report
     assert "feed_uptime" in report
+    assert "signal_skips" in report
     assert "No signatures" in report["notes"][-1]
 
 
@@ -230,3 +233,12 @@ def test_daily_report_http_on_populated_ledger(settings: Settings, clock: Frozen
     assert body["lifetime_counts"]["fills"] == 1
     assert body["paper_fills"] == 1
     assert body["rejected_candidates_by_reason"]["deviation_bps"] == 1
+    assert "day_realized_pnl_usdt_micro" in body
+    assert "day_unrealized_pnl_usdt_micro" in body
+    assert body["day_realized_pnl_usdt_micro"] == body["net_pnl_usdt_micro"]
+    assert body["signal_skips"]["fired"] == 0
+    trade = body["trades"][0]
+    assert "all_in_cost_bps" in trade
+    assert "slippage_bps" in trade
+    assert "delay_s" in trade
+    assert trade["quote_id"]
