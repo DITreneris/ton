@@ -16,6 +16,7 @@ from ton_gram.ledger import Ledger
 from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import HaltReason
 from ton_gram.report import build_daily_report
+from ton_gram.telegram_text import format_halt_card
 from ton_gram.validator import validate_monitor_result
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -144,7 +145,7 @@ def create_app(
     @app.post("/v1/control/halt")
     def halt(_: None = Depends(require_bearer)) -> dict[str, Any]:
         ledger.latch_halt(HaltReason.OPERATOR)
-        app.state.alerter.send("halt", "Operator latched sticky entry halt")
+        app.state.alerter.send("halt", format_halt_card("OPERATOR", "Operator latched sticky entry halt"))
         return {"entry_halt": True, "reason": "OPERATOR"}
 
     @app.post("/v1/control/rearm")
