@@ -77,6 +77,7 @@ python -m ton_gram drill all --isolated --http
 python -m ton_gram telegram-test
 python -m ton_gram halt
 python -m ton_gram rearm
+python -m ton_gram reset-paper
 python -m ton_gram validate-result path/to/MONITOR_RESULT.json --snapshot-json artifacts/sample_snapshot.json
 pytest
 ```
@@ -95,7 +96,7 @@ pytest
   "scope_verification": { "status": "PASS", "network": "mainnet", "checks": [] },
   "freshness": { "quote_age_ms": 12, "max_quote_age_ms": 15000, "stale": false },
   "feed_health": { "stonfi_quotes": { "status": "UP", "latency_ms": 80 } },
-  "cost_model": { "source": "measured", "delay_stress_s": 3, "measured_net_cost_p90_nano": 8000000 },
+  "cost_model": { "source": "measured", "delay_stress_s": 3, "measured_net_cost_p90_nano": 210479331, "profile": {} },
   "required_coverage": { "quotes_both_directions": true, "pool_liquidity": true, "scope": true },
   "incidents": [],
   "open_execution_state": { "unresolved_intents": [], "entry_halt": false, "position": {} },
@@ -109,7 +110,7 @@ pytest
 
 ## Gas refund measurement
 
-`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report.
+`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image copies `artifacts/` and ships `src/ton_gram/data/gas_profile.json` as package data so boot hydrates `cost_model.source=measured` even after `pip install`.
 
 ## Recovery drills
 
@@ -119,7 +120,7 @@ Admin-only. Disabled unless `TON_GRAM_DRILL_TOKEN` is set. Local isolated run (d
 python -m ton_gram drill all --isolated --http
 ```
 
-Against a running instance (including Railway), drills mutate that instance's paper ledger:
+Against a running instance (including Railway), drills use a **separate** `drill.sqlite3` next to the paper ledger. They never change paper positions, PnL, the daily report, or the live halt latch:
 
 ```bash
 export TON_GRAM_DRILL_TOKEN=long-random-admin-token
@@ -129,7 +130,15 @@ curl -X POST -H "Authorization: Bearer $TON_GRAM_DRILL_TOKEN" \
   https://YOUR-RAILWAY-HOST/v1/drill/all
 ```
 
-Scenarios: `kill_before_broadcast`, `kill_after_broadcast`, `duplicate_event`, `rpc_timeout`, `bounce`, `delayed_refund`. Each asserts at most one fill, no false fill, and a terminal intent or latched incident.
+Scenarios: `kill_before_broadcast`, `kill_after_broadcast`, `duplicate_event`, `rpc_timeout`, `bounce`, `delayed_refund`. Each asserts at most one fill, no false fill, and a terminal intent or latched incident. Results include `"namespace": "drill"` and `"paper_untouched": true`.
+
+Reset the **paper** ledger to starting balances (bearer, logged as `halt_events.action=reset`):
+
+```bash
+python -m ton_gram reset-paper
+curl -X POST -H "Authorization: Bearer $TON_GRAM_SNAPSHOT_BEARER_TOKEN" \
+  https://YOUR-RAILWAY-HOST/v1/control/reset
+```
 
 ## Telegram
 
@@ -168,7 +177,7 @@ Use the included `fly.toml` (`internal_port = 43177`, volume mounted at `/data`)
 
 Create a service from this repo, set the same env vars, and attach a **Railway volume** at `/data` (do not rely on a Dockerfile `VOLUME`). The worker listens on Railway's `PORT` when `TON_GRAM_PORT` is unset. Health check: `GET /healthz`.
 
-Backup `data/paper.sqlite3` regularly. This is the only durable store.
+Backup `data/paper.sqlite3` regularly. This is the only durable store. Drills write `data/drill.sqlite3` and never open the paper file.
 
 ## Baseline strategy
 
