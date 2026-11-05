@@ -217,13 +217,22 @@ class PaperWorker:
         key = f"daily_summary_{day}"
         if self.ledger.recent_alert(key, 36 * 3600):
             return
-        report = build_daily_report(self.ledger, self.clock, day)
+        try:
+            report = build_daily_report(self.ledger, self.clock, day)
+        except Exception:  # noqa: BLE001
+            log.exception("daily report failed")
+            return
         text = (
             f"Daily paper summary {day}: trades={report['trades_count']} "
             f"net_pnl_usdt_micro={report['net_pnl_usdt_micro']} "
             f"halts={len(report['halts'])} halt={report['entry_halt']}"
         )
-        result = self.alerter.send(key, text)
+        try:
+            result = self.alerter.send(key, text)
+        except Exception:  # noqa: BLE001
+            log.exception("telegram daily summary failed")
+            self.ledger.record_alert(key)
+            return
         if result.get("skipped") and result.get("reason") == "disabled":
             self.ledger.record_alert(key)
 
