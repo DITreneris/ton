@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 import tempfile
 import threading
@@ -15,6 +14,7 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.api import create_app
 from ton_gram.clock import Clock, FrozenClock
 from ton_gram.config import Settings, reset_settings_cache
+from ton_gram.logutil import configure_logging
 from ton_gram.drill import SCENARIOS, isolated_harness, remote_run, run_all
 from ton_gram.ledger import Ledger
 from ton_gram.measure import (
@@ -246,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
     commands = {
