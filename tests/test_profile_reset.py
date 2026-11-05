@@ -1,3 +1,6 @@
+import ast
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from ton_gram.api import create_app
@@ -59,6 +62,33 @@ def test_reset_paper_restores_starting_balances(settings, clock, ledger):
     events = ledger.halt_events_for_day(format_utc(clock.now())[:10])
     assert any(e["action"] == "reset" for e in events)
     assert before.gram_nano == settings.paper_gram_nano
+
+
+def test_counts_verdict_filters_use_one_binding(settings, ledger):
+    """Regression: (RiskVerdict.APPROVE.value) without a comma is 7 SQLite bindings."""
+    counts = ledger.counts()
+    assert counts["approvals"] == 0
+    assert counts["rejections"] == 0
+    assert counts["fills"] == 0
+
+
+def test_execute_params_are_sequences():
+    """Bare (enum.value) is a string; SQLite iterates it as N bindings."""
+    flagged: list[str] = []
+    for path in Path("src").rglob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name not in {"execute", "executemany"} or len(node.args) < 2:
+                continue
+            params = node.args[1]
+            if isinstance(params, (ast.Tuple, ast.List, ast.Name)):
+                continue
+            flagged.append(f"{path}:{params.lineno}:{ast.unparse(params)}")
+    assert flagged == []
 
 
 def test_reset_http_requires_bearer(settings, clock, ledger):
