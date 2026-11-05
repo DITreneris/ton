@@ -128,8 +128,10 @@ class Settings(BaseSettings):
     latency_stress_margin_s: int = 2
     heartbeat_miss_s: float = 45.0
     quote_offer_gram_nano: int = GRAM_SCALE  # 1 GRAM
-    quote_offer_usdt_micro: int = 10 * USDT_SCALE  # 10 USD₮
+    quote_offer_usdt_micro: int = 10 * USDT_SCALE  # fallback if GRAM→USD₮ ask is missing
     simulate_slippage_tolerance: str = "0.01"
+    mid_spread_max_bps: int = 15
+    daily_summary_hour_utc: int = 6  # 08:00 Europe/Vilnius in winter
 
     strategy_lookback: int = 8
     strategy_entry_deviation_bps: int = 25
@@ -152,6 +154,14 @@ class Settings(BaseSettings):
     @classmethod
     def network_must_be_mainnet_default(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("daily_summary_hour_utc")
+    @classmethod
+    def hour_must_be_utc_hour(cls, value: int) -> int:
+        hour = int(value)
+        if hour < 0 or hour > 23:
+            raise ValueError("daily_summary_hour_utc must be 0-23")
+        return hour
 
     @property
     def db_path(self) -> Path:
