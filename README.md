@@ -72,6 +72,7 @@ Other commands:
 python -m ton_gram once --snapshot-out artifacts/sample_snapshot.json
 python -m ton_gram verify-scope
 python -m ton_gram report --day 2026-11-05
+python -m ton_gram learn --day 2026-11-05
 python -m ton_gram measure-gas --target 60
 python -m ton_gram drill all --isolated --http
 python -m ton_gram telegram-test
@@ -107,6 +108,14 @@ pytest
 `POST /v1/monitor-result` validates the Grok `MONITOR_RESULT` contract (schema, snapshot binding, evidence-ID membership, late-result window) and records `VALID` / `INVALID_*` / `UNAVAILABLE`. Invalid or missing assessments have **zero execution authority**.
 
 `GET /v1/report/daily?date=YYYY-MM-DD` (same snapshot bearer) returns trades, gross/net PnL after stressed costs, drawdown, fees, rejected candidates by reason, halt events, feed uptime, and quote-age stats. Omit `date` for today UTC.
+
+## Closed learning loop
+
+The Prompt Anatomy diagram is a full coding OS. This repo is a paper trader. Only the right-hand loop is wired here: **logs → evaluate → lessons → advisory rules**.
+
+`python -m ton_gram learn` (or `POST /v1/learn` with the snapshot bearer) scores the UTC paper day from the ledger. It writes lessons and recommended rules into `control_state.learn_last_json`. `GET /v1/learn` returns the last pass. The next snapshot copies that payload under `learning`.
+
+This pass is deterministic. There is no LLM, no extra agent roster, and **no auto-apply**. It will not lower the 25 bps entry gate or turn signing on. A quiet/flat book is scored as the working baseline, not as a bug to manufacture fills.
 
 ## Gas refund measurement
 
