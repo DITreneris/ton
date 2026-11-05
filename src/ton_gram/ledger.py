@@ -167,6 +167,7 @@ class Ledger:
             "seq": "0",
             "last_heartbeat_utc": "",
             "gas_profile_json": "",
+            "strategy_state_json": "",
         }
         for key, value in defaults.items():
             self.conn.execute(
@@ -661,6 +662,15 @@ class Ledger:
             return None
         return json.loads(raw)
 
+    def save_strategy_state(self, payload: dict[str, Any]) -> None:
+        self.set_control("strategy_state_json", _json(payload))
+
+    def load_strategy_state(self) -> dict[str, Any] | None:
+        raw = self.get_control("strategy_state_json")
+        if not raw:
+            return None
+        return json.loads(raw)
+
     def get_intent(self, intent_id: str) -> Intent | None:
         row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
         return _intent_from_row(row) if row else None
@@ -716,6 +726,7 @@ class Ledger:
         self.set_control("entry_halt", "0")
         self.set_control("halt_reason", "")
         self.set_control("recovered", "0")
+        self.set_control("strategy_state_json", "")
         self.conn.execute(
             "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
             (now, "reset", reason),
