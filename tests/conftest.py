@@ -40,6 +40,7 @@ def settings(tmp_path: Path) -> Settings:
         strategy_trade_usdt_micro=50_000_000,
         max_trade_usdt_micro=50_000_000,
         telegram_enabled=False,
+        daily_summary_hour_utc=0,
     )
 
 

@@ -19,9 +19,13 @@ class FakeClient:
     def __init__(self, status_code: int = 200) -> None:
         self.calls = 0
         self.status_code = status_code
+        self.last_text = ""
+        self.texts: list[str] = []
 
     def post(self, url, json):
         self.calls += 1
+        self.last_text = (json or {}).get("text") or ""
+        self.texts.append(self.last_text)
         return FakeResp(self.status_code)
 
 
