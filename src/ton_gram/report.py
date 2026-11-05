@@ -82,6 +82,7 @@ def build_daily_report(ledger: Ledger, clock: Clock, day_utc: str | None = None)
             {
                 "fill_id": row["fill_id"],
                 "intent_id": row["intent_id"],
+                "quote_id": row.get("quote_id") or payload.get("quote_id"),
                 "filled_at_utc": row["filled_at_utc"],
                 "direction": direction,
                 "offer_units": offer,
@@ -89,6 +90,10 @@ def build_daily_report(ledger: Ledger, clock: Clock, day_utc: str | None = None)
                 "gross_pnl_usdt_micro": gross,
                 "network_cost_usdt_micro": net_cost,
                 "net_pnl_usdt_micro": gross - net_cost,
+                "all_in_cost_bps": int(payload.get("all_in_cost_bps") or 0),
+                "slippage_bps": int(payload.get("slippage_bps") or 0),
+                "delay_s": int(payload.get("delay_s") or 0),
+                "delay_adverse_bps": int(payload.get("delay_adverse_bps") or 0),
             }
         )
 
@@ -117,6 +122,10 @@ def build_daily_report(ledger: Ledger, clock: Clock, day_utc: str | None = None)
 
     ages = ledger.quote_ages_ms_for_day(day)
     profile = ledger.load_gas_profile() or {}
+    day_realized = sum(int(t["net_pnl_usdt_micro"]) for t in trades)
+    day_unrealized = int(position.daily_pnl_usdt_micro) - day_realized
+    snap = ledger.latest_snapshot() or {}
+    scope_status = (snap.get("scope_verification") or {}).get("status") or "UNAVAILABLE"
     report = {
         "day_utc": day,
         "as_of_utc": format_utc(clock.now()),
@@ -136,6 +145,10 @@ def build_daily_report(ledger: Ledger, clock: Clock, day_utc: str | None = None)
         "fees_usdt_micro": fees_usdt_micro,
         "network_cost_usdt_micro": network_cost_usdt_micro,
         "net_pnl_usdt_micro": gross_pnl - network_cost_usdt_micro,
+        "day_realized_pnl_usdt_micro": day_realized,
+        "day_unrealized_pnl_usdt_micro": day_unrealized,
+        "scope_status": scope_status,
+        "signal_skips": ledger.load_signal_skips(day),
         "drawdown_usdt_micro": position.peak_equity_usdt_micro - position.equity_usdt_micro,
         "halts": ledger.halt_events_for_day(day),
         "feed_uptime": uptime,
