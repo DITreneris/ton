@@ -12,6 +12,7 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock
 from ton_gram.config import Settings
 from ton_gram.drill import SCENARIOS, isolated_harness, run_all
+from ton_gram.learn import load_learn, run_learn
 from ton_gram.ledger import Ledger
 from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import HaltReason
@@ -171,6 +172,22 @@ def create_app(
         if date and not DATE_RE.match(date):
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
         return build_daily_report(ledger, clock, date)
+
+    @app.post("/v1/learn")
+    def learn(
+        _: None = Depends(require_bearer),
+        date: str | None = Query(default=None, description="UTC day YYYY-MM-DD"),
+    ) -> dict[str, Any]:
+        if date and not DATE_RE.match(date):
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+        return run_learn(ledger, clock, date)
+
+    @app.get("/v1/learn")
+    def learn_latest(_: None = Depends(require_bearer)) -> dict[str, Any]:
+        payload = load_learn(ledger)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="no learn pass yet")
+        return payload
 
     @app.post("/v1/drill/all")
     def drill_all(_: None = Depends(require_drill)) -> dict[str, Any]:
