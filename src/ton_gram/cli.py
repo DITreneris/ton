@@ -15,7 +15,7 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.api import create_app
 from ton_gram.clock import Clock, FrozenClock
 from ton_gram.config import Settings, reset_settings_cache
-from ton_gram.drill import SCENARIOS, DrillHarness, remote_run, run_all
+from ton_gram.drill import SCENARIOS, isolated_harness, remote_run, run_all
 from ton_gram.ledger import Ledger
 from ton_gram.measure import (
     GasMeasurer,
@@ -176,10 +176,9 @@ def cmd_drill(args: argparse.Namespace) -> int:
         settings.data_dir = Path(tempfile.mkdtemp(prefix="ton-gram-drill-"))
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     clock = FrozenClock()
-    ledger = Ledger(settings, clock)
-    harness = DrillHarness(settings, clock, ledger)
+    paper = Ledger(settings, clock)
     if args.http:
-        app = create_app(settings, ledger, clock)
+        app = create_app(settings, paper, clock)
         client = TestClient(app)
         headers = {"Authorization": f"Bearer {settings.drill_token}"}
         path = "/v1/drill/all" if scenario == "all" else f"/v1/drill/{scenario}"
@@ -187,11 +186,23 @@ def cmd_drill(args: argparse.Namespace) -> int:
         result = response.json()
         ok = response.status_code == 200 and result.get("passed", True)
     else:
+        harness = isolated_harness(settings, clock)
         result = run_all(harness) if scenario == "all" else harness.run(scenario)
+        if scenario != "all":
+            result = {"namespace": "drill", "paper_untouched": True, **result}
+        harness.ledger.close()
         ok = bool(result.get("passed"))
     print(json.dumps(result, indent=2, default=str))
-    ledger.close()
+    paper.close()
     return 0 if ok else 2
+
+
+def cmd_reset_paper(args: argparse.Namespace) -> int:
+    settings, _clock, ledger = _boot()
+    result = ledger.reset_paper(reason="OPERATOR")
+    print(json.dumps(result, indent=2))
+    ledger.close()
+    return 0
 
 
 def cmd_telegram_test(args: argparse.Namespace) -> int:
@@ -218,6 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--day", default=None)
     sub.add_parser("halt", help="latch sticky entry halt")
     sub.add_parser("rearm", help="explicit operator rearm")
+    sub.add_parser("reset-paper", help="wipe paper fills/intents and restore starting balances")
     measure = sub.add_parser("measure-gas", help="read-only mainnet gas/refund/latency sample")
     measure.add_argument("--target", type=int, default=60)
     measure.add_argument("--csv", default="")
@@ -245,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         "report": cmd_report,
         "halt": cmd_halt,
         "rearm": cmd_rearm,
+        "reset-paper": cmd_reset_paper,
         "measure-gas": cmd_measure_gas,
         "drill": cmd_drill,
         "telegram-test": cmd_telegram_test,

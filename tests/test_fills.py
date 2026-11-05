@@ -37,3 +37,34 @@ def test_measured_net_cost_replaces_quote_gas(settings: Settings, clock: FrozenC
     )
     assert fill.network_cost_gram_nano == 8_000_000 + 2_000_000
     assert fill.delay_s == settings.delay_stress_s
+
+
+def test_network_cost_usdt_is_gram_marked_at_mid(settings: Settings, clock: FrozenClock):
+    """Regression: do not invert (gas_nano, mid) through usdt_per_gram_micro.
+
+    That helper computes a *price*. Using it for 0.263 GRAM of gas at ~1.16 USD₮
+    booked ~2.5 USD₮ per fill instead of ~0.30 USD₮.
+    """
+    settings.measured_net_cost_p90_nano = 210_479_331
+    settings.network_cost_stress_margin_bps = 2_500
+    quote = make_quote(clock, Direction.GRAM_TO_USDT, ask_units=1_160_000)
+    mid = 1_160_000
+    fill = simulate_fill(
+        fill_id="f3",
+        intent_id="i3",
+        quote=quote,
+        offer_units=1_000_000_000,
+        filled_at_utc=format_utc(clock.now()),
+        settings=settings,
+        mid_usdt_per_gram_micro=mid,
+    )
+    assert fill.network_cost_gram_nano == 263_099_163
+    assert fill.network_cost_usdt_micro == (263_099_163 * mid) // 1_000_000_000
+    assert fill.network_cost_usdt_micro == 305_195
+    assert fill.network_cost_usdt_micro < 400_000
+    # The inverted helper would have produced ~4.4 USD₮ at this mid.
+    from ton_gram.units import usdt_per_gram_micro
+
+    inverted = usdt_per_gram_micro(fill.network_cost_gram_nano, mid)
+    assert inverted > 2_000_000
+    assert fill.network_cost_usdt_micro != inverted
