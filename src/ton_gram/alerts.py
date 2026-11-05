@@ -24,10 +24,14 @@ class TelegramAlerter:
             and self.settings.telegram_chat_id
         )
 
-    def send(self, alert_key: str, text: str) -> dict[str, Any]:
-        if not self.enabled:
+    @property
+    def configured(self) -> bool:
+        return bool(self.settings.telegram_bot_token and self.settings.telegram_chat_id)
+
+    def send(self, alert_key: str, text: str, *, force: bool = False) -> dict[str, Any]:
+        if not (self.enabled or (force and self.configured)):
             return {"skipped": True, "reason": "disabled"}
-        if self.ledger.recent_alert(alert_key, self.settings.telegram_dedupe_s):
+        if not force and self.ledger.recent_alert(alert_key, self.settings.telegram_dedupe_s):
             return {"skipped": True, "reason": "deduped"}
         url = f"https://api.telegram.org/bot{self.settings.telegram_bot_token}/sendMessage"
         response = self.client.post(
