@@ -10,6 +10,7 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock, format_utc, parse_utc
 from ton_gram.config import Settings
 from ton_gram.ledger import Ledger
+from ton_gram.logutil import configure_logging
 from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import Direction, HaltReason, RiskVerdict
 from ton_gram.poller import MarketPoller, ProviderError
@@ -171,6 +172,7 @@ class PaperWorker:
         self._maybe_daily_summary()
         if snapshot.get("incidents"):
             self._alert("incident", f"Snapshot incidents: {[i.get('code') for i in snapshot['incidents']]}")
+        signal = self.strategy.signal_view(mid)
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
@@ -178,10 +180,14 @@ class PaperWorker:
             "intent_id": intent.intent_id if intent else None,
             "halt": self.ledger.entry_halt,
             "mid_usdt_per_gram_micro": mid,
+            "skip": None if candidate is not None else signal["skip"],
+            "deviation_bps": signal["deviation_bps"],
+            "threshold_bps": signal["threshold_bps"],
+            "sma_usdt_per_gram_micro": signal["sma_usdt_per_gram_micro"],
         }
 
     def run_forever(self) -> None:
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+        configure_logging()
         log.info("paper worker starting; signing=false broadcast=false")
         self.recover_if_needed()
         while not self.stop_event.is_set():
