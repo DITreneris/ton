@@ -37,7 +37,7 @@ class PaperWorker:
         self.clock = clock
         self.ledger = ledger
         self.poller = poller or MarketPoller(settings, clock)
-        self.strategy = strategy or BaselineStrategy(settings, clock)
+        self.strategy = strategy or BaselineStrategy(settings, clock, ledger.load_strategy_state())
         self.alerter = alerter or TelegramAlerter(settings, ledger)
         self.stop_event = threading.Event()
         self.last_snapshot: dict[str, Any] | None = None
@@ -90,6 +90,7 @@ class PaperWorker:
                 quotes[Direction.GRAM_TO_USDT],
                 quotes[Direction.USDT_TO_GRAM],
             )
+            self.ledger.save_strategy_state(self.strategy.dump_state())
             self.ledger.mark_to_market(mid)
             scope = verify_scope(
                 self.settings,
@@ -181,6 +182,8 @@ class PaperWorker:
             "halt": self.ledger.entry_halt,
             "mid_usdt_per_gram_micro": mid,
             "skip": None if candidate is not None else signal["skip"],
+            "samples": signal["samples"],
+            "lookback": signal["lookback"],
             "deviation_bps": signal["deviation_bps"],
             "threshold_bps": signal["threshold_bps"],
             "sma_usdt_per_gram_micro": signal["sma_usdt_per_gram_micro"],
