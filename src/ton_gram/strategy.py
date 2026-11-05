@@ -14,12 +14,35 @@ from ton_gram.units import GRAM_SCALE, USDT_SCALE, bps_delta, gram_from_usdt
 class BaselineStrategy:
     """Mean-reversion vs a simple SMA of mid USDT-micro per GRAM."""
 
-    def __init__(self, settings: Settings, clock: Clock) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        clock: Clock,
+        state: dict[str, Any] | None = None,
+    ) -> None:
         self.settings = settings
         self.clock = clock
         self.mids: deque[int] = deque(maxlen=max(2, settings.strategy_lookback))
         self.cycles_since_signal = settings.strategy_cooldown_cycles
         self.seq = 0
+        self.restore(state)
+
+    def restore(self, state: dict[str, Any] | None) -> None:
+        if not state:
+            return
+        for mid in state.get("mids") or []:
+            if isinstance(mid, int) and mid > 0:
+                self.mids.append(mid)
+        cooldown = int(state.get("cycles_since_signal") or self.settings.strategy_cooldown_cycles)
+        self.cycles_since_signal = max(0, cooldown)
+        self.seq = max(0, int(state.get("seq") or 0))
+
+    def dump_state(self) -> dict[str, Any]:
+        return {
+            "mids": list(self.mids),
+            "cycles_since_signal": self.cycles_since_signal,
+            "seq": self.seq,
+        }
 
     def observe_mid(self, gram_to_usdt: Quote, usdt_to_gram: Quote) -> int:
         left = gram_to_usdt.usdt_per_gram_micro
