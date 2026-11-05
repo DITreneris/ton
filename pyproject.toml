@@ -30,7 +30,7 @@ ton-gram = "ton_gram.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ton_gram = ["static/*"]
+ton_gram = ["static/*", "data/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -40,25 +40,39 @@ def reduce_by_bps(amount: int, bps: int) -> int:
 
 
 def bps_delta(current: int, reference: int) -> int:
+    """Signed basis-point change of current vs reference. 0 if reference is 0."""
     if reference == 0:
         return 0
     return ((current - reference) * BPS_SCALE) // reference
 
 
 def usdt_per_gram_micro(gram_nano: int, usdt_micro: int) -> int:
+    """USDT microunits received per 1 GRAM (1e9 nano), integer."""
     if gram_nano <= 0:
         return 0
     return (usdt_micro * GRAM_SCALE) // gram_nano
 
 
 def gram_per_usdt_nano(usdt_micro: int, gram_nano: int) -> int:
+    """GRAM nano received per 1 USDT (1e6 micro), integer."""
     if usdt_micro <= 0:
         return 0
     return (gram_nano * USDT_SCALE) // usdt_micro
 
 
+def usdt_value_micro(gram_nano: int, usdt_per_gram_micro: int) -> int:
+    """Convert a GRAM nano amount to USD₮ micro at a micro-per-GRAM mid.
+
+    Do not use usdt_per_gram_micro() for this: that helper computes a *price*
+    from a swap pair, and inverting (gas_nano, mid) books ~GRAM_SCALE/gas too much.
+    """
+    if gram_nano <= 0 or usdt_per_gram_micro <= 0:
+        return 0
+    return (int(gram_nano) * int(usdt_per_gram_micro)) // GRAM_SCALE
+
+
 def mark_usdt_micro(gram_nano: int, usdt_micro: int, usdt_per_gram_micro: int) -> int:
-    return usdt_micro + (gram_nano * usdt_per_gram_micro) // GRAM_SCALE
+    return usdt_micro + usdt_value_micro(gram_nano, usdt_per_gram_micro)
 
 
 def gram_from_usdt(usdt_micro: int, usdt_per_gram_micro: int) -> int:

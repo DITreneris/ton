@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ton_gram.config import Settings
 from ton_gram.models import Direction, PaperFill, Quote
-from ton_gram.units import apply_bps, reduce_by_bps, usdt_per_gram_micro
+from ton_gram.units import apply_bps, reduce_by_bps, usdt_value_micro
 
 
 def stressed_ask_units(quote: Quote, settings: Settings, offer_units: int) -> tuple[int, int]:
@@ -38,16 +38,16 @@ def simulate_fill(
     raw_ask, filled_ask = stressed_ask_units(quote, settings, offer_units)
     gas_gram = network_cost_gram_nano(quote, settings)
     mid = mid_usdt_per_gram_micro or quote.usdt_per_gram_micro
-    gas_usdt = usdt_per_gram_micro(gas_gram, mid) if mid > 0 else 0
+    gas_usdt = usdt_value_micro(gas_gram, mid)
     if quote.direction is Direction.GRAM_TO_USDT:
-        notional = usdt_per_gram_micro(offer_units, mid) if mid > 0 else raw_ask
+        notional = usdt_value_micro(offer_units, mid) if mid > 0 else raw_ask
         received = filled_ask
         shortfall = max(0, notional - received) + gas_usdt
         all_in = (shortfall * 10_000) // notional if notional else 0
         pool_fee = (quote.fee_units * offer_units) // quote.offer_units if quote.offer_units else 0
     else:
         notional = offer_units
-        received_usdt = usdt_per_gram_micro(filled_ask, mid) if mid > 0 else 0
+        received_usdt = usdt_value_micro(filled_ask, mid)
         shortfall = max(0, notional - received_usdt) + gas_usdt
         all_in = (shortfall * 10_000) // notional if notional else 0
         pool_fee = (quote.fee_units * offer_units) // quote.offer_units if quote.offer_units else 0

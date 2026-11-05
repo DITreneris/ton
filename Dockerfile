@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY artifacts ./artifacts
 RUN pip install --no-cache-dir . \
     && useradd --create-home --uid 10001 appuser \
     && mkdir -p /data \
