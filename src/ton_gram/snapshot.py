@@ -6,6 +6,7 @@ from typing import Any
 
 from ton_gram.clock import Clock, format_utc, parse_utc
 from ton_gram.config import Settings
+from ton_gram.learn import load_learn
 from ton_gram.ledger import Ledger
 from ton_gram.models import Direction, Quote, ScopeVerification, to_plain
 from ton_gram.risk import quote_age_ms
@@ -196,6 +197,7 @@ def build_snapshot(
             "mid_usdt_per_gram_micro": mid_usdt_per_gram_micro,
         },
         "evidence_registry": registry,
+        "learning": load_learn(ledger),
     }
     # Binding helper used by the validator; not a secret.
     snapshot["evidence_ids"] = [item["evidence_id"] for item in registry]
