@@ -12,6 +12,7 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import Clock
 from ton_gram.config import Settings
 from ton_gram.drill import SCENARIOS, isolated_harness, run_all
+from ton_gram.documents import DocStore
 from ton_gram.learn import load_learn, run_learn
 from ton_gram.ledger import Ledger
 from ton_gram.measure import hydrate_cost_model
@@ -188,6 +189,24 @@ def create_app(
         if payload is None:
             raise HTTPException(status_code=404, detail="no learn pass yet")
         return payload
+
+    def _docs() -> DocStore:
+        return DocStore(settings.docs_dir, clock)
+
+    @app.get("/v1/docs")
+    def docs_index(_: None = Depends(require_bearer)) -> dict[str, Any]:
+        return _docs().index()
+
+    @app.get("/v1/docs/{doc_id}")
+    def docs_get(
+        doc_id: str,
+        _: None = Depends(require_bearer),
+        version: int | None = Query(default=None),
+    ) -> dict[str, Any]:
+        try:
+            return _docs().get(doc_id, version)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="document not found") from None
 
     @app.post("/v1/drill/all")
     def drill_all(_: None = Depends(require_drill)) -> dict[str, Any]:
