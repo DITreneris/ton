@@ -365,6 +365,7 @@ class Ledger:
             sod_equity = equity
         else:
             sod_equity = equity - position.daily_pnl_usdt_micro
+            # keep daily as equity - start-of-day; start-of-day inferred from previous daily
             start = position.equity_usdt_micro - position.daily_pnl_usdt_micro
             sod_equity = start
         position.as_of_utc = now
@@ -581,16 +582,15 @@ class Ledger:
         for table in ("quotes", "candidates", "risk_decisions", "intents", "fills", "snapshots", "assessments"):
             row = self.conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
             out[table] = int(row["n"])
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
-            (RiskVerdict.APPROVE.value),
-        ).fetchone()
-        out["approvals"] = int(row["n"])
-        row = self.conn.execute(
-            "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
-            (RiskVerdict.REJECT.value),
-        ).fetchone()
-        out["rejections"] = int(row["n"])
+        for key, verdict in (
+            ("approvals", RiskVerdict.APPROVE.value),
+            ("rejections", RiskVerdict.REJECT.value),
+        ):
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
+                [verdict],
+            ).fetchone()
+            out[key] = int(row["n"])
         return out
 
     def day_rows(self, day_utc: str) -> dict[str, Iterable[sqlite3.Row]]:
