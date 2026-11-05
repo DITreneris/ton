@@ -2,7 +2,7 @@
 
 This worker is paper-mode only. It does not hold keys, does not sign, and does not broadcast.
 
-Destination (see `ROADMAP.md`): a self-sustaining profitable GRAM↔USD₮ bot by late 2027 **if** a net edge exists after costs. Ambition does not relax these gates. Live signing stays out of this tree until **Phase 3** is explicitly opened after a Phase 2 go. Phase 2 is a paper go / no-go, not a key-install month.
+Destination (see `ROADMAP.md`): a self-sustaining profitable GRAM↔USD₮ bot **as soon as the book pays**. Ambition does not relax these gates. Live signing stays out of this tree until **Phase 3** is explicitly opened after a Phase 2 go. Phase 2 is a same-day paper go / no-go, not a waiting month.
 
 ## Gates that stay put
 
@@ -24,7 +24,7 @@ Restart recovery uses the same clock as `settle_due_intents`:
 
 Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`. Rearm is manual. A feed-down keeps `HARD_HALT` and does not overwrite it with `SCOPE_MISMATCH`.
 
-`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~ **170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`. Do not rearm to manufacture fills.
+`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~**170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`. Do not rearm to manufacture fills.
 
 ## Learn and reset
 
