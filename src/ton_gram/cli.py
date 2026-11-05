@@ -8,7 +8,6 @@ import threading
 from pathlib import Path
 
 import uvicorn
-from fastapi.testclient import TestClient
 
 from ton_gram.alerts import TelegramAlerter
 from ton_gram.api import create_app
@@ -178,6 +177,8 @@ def cmd_drill(args: argparse.Namespace) -> int:
     clock = FrozenClock()
     paper = Ledger(settings, clock)
     if args.http:
+        from fastapi.testclient import TestClient
+
         app = create_app(settings, paper, clock)
         client = TestClient(app)
         headers = {"Authorization": f"Bearer {settings.drill_token}"}
