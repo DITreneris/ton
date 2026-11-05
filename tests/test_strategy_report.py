@@ -9,6 +9,58 @@ from ton_gram.strategy import BaselineStrategy
 from tests.conftest import make_quote
 
 
+def test_restore_zero_cooldown_stays_cooling(settings: Settings, clock: FrozenClock):
+    settings.strategy_lookback = 3
+    settings.strategy_cooldown_cycles = 3
+    settings.strategy_entry_deviation_bps = 1
+    first = BaselineStrategy(settings, clock)
+    low = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g0", ask_units=1_160_000)
+    low_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u0", ask_units=8_620_000_000)
+    for _ in range(3):
+        first.observe_mid(low, low_u)
+    shocked = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g1", ask_units=1_200_000)
+    shocked_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u1", ask_units=8_330_000_000)
+    mid = first.observe_mid(shocked, shocked_u)
+    assert first.maybe_candidate(shocked, shocked_u, mid) is not None
+    assert first.cycles_since_signal == 0
+    restored = BaselineStrategy(settings, clock, first.dump_state())
+    assert restored.cycles_since_signal == 0
+    assert restored.maybe_candidate(shocked, shocked_u, mid) is None
+
+
+def test_worker_persists_cooldown_after_signal(settings: Settings, clock: FrozenClock, tmp_path):
+    from ton_gram.ledger import Ledger
+    from ton_gram.worker import PaperWorker
+
+    settings.strategy_lookback = 3
+    settings.strategy_cooldown_cycles = 3
+    settings.strategy_entry_deviation_bps = 1
+    db = tmp_path / "paper.sqlite3"
+    ledger = Ledger(settings, clock, db)
+    worker = PaperWorker(settings, clock, ledger)
+    low = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g0", ask_units=1_160_000)
+    low_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u0", ask_units=8_620_000_000)
+    for i in range(3):
+        worker.strategy.observe_mid(
+            make_quote(clock, Direction.GRAM_TO_USDT, quote_id=f"g{i}", ask_units=1_160_000),
+            make_quote(clock, Direction.USDT_TO_GRAM, quote_id=f"u{i}", ask_units=8_620_000_000),
+        )
+    shocked = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="gX", ask_units=1_200_000)
+    shocked_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="uX", ask_units=8_330_000_000)
+    mid = worker.strategy.observe_mid(shocked, shocked_u)
+    cand = worker.strategy.maybe_candidate(shocked, shocked_u, mid)
+    assert cand is not None
+    worker.ledger.save_strategy_state(worker.strategy.dump_state())
+    worker.close()
+    ledger.close()
+    restarted = Ledger(settings, clock, db)
+    again = PaperWorker(settings, clock, restarted)
+    assert again.strategy.cycles_since_signal == 0
+    assert again.strategy.maybe_candidate(shocked, shocked_u, mid) is None
+    again.close()
+    restarted.close()
+
+
 def test_strategy_state_survives_restart(settings: Settings, clock: FrozenClock):
     settings.strategy_lookback = 3
     first = BaselineStrategy(settings, clock)
