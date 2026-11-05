@@ -11,6 +11,7 @@ def test_format_usd_signs():
     assert format_usd(0) == "$0.00"
     assert format_usd(2_400_000) == "+$2.40"
     assert format_usd(-300_000) == "-$0.30"
+    assert format_usd(40_000_000, signed=False) == "$40.00"
 
 
 def test_daily_card_uses_report_fields():
@@ -28,7 +29,8 @@ def test_daily_card_uses_report_fields():
             "drawdown_usdt_micro": 40_000_000,
             "candidates": 0,
             "rejected_candidates_by_reason": {},
-            "signal_skips": {"flat": 12, "warming": 1, "cooldown": 0, "spread": 0, "fired": 0},
+            "net_pnl_usdt_micro": 5_000_000,
+            "signal_skips": {"flat": 12, "warming": 1, "cooldown": 0, "spread": 0, "emitted": 0, "approved": 0},
             "feed_uptime": {"stonfi_quotes": {"uptime_pct": 100.0}},
             "quote_age": {"p90": 40},
         },
@@ -38,9 +40,10 @@ def test_daily_card_uses_report_fields():
     assert "Mode: PAPER" in text
     assert "Status: RUNNING" in text
     assert "Scope: PASS" in text
+    assert "Net P&L: $0.00" in text
     assert "Unrealized (mark): -$0.30" in text
-    assert "Drawdown: +$40.00 (0.40% of $10000 cap)" in text
-    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / fired 0" in text
+    assert "Drawdown: $40.00 (0.40% of $10000 cap)" in text
+    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / emitted 0 / approved 0" in text
     assert "Feed: stonfi_quotes UP 100.0%" in text
 
 
@@ -90,6 +93,7 @@ def test_feed_down_sends_halt_card(settings, clock, ledger):
     assert client.calls >= 1
     halt_text = next(t for t in client.texts if "HARD_HALT" in t)
     assert "ENTRY HALTED" in halt_text
+    assert worker.ledger.halt_reason == "HARD_HALT"
     worker.close()
 
 
@@ -145,10 +149,11 @@ def test_wide_spread_skips_candidate(settings, clock, ledger):
     from ton_gram.worker import PaperWorker
     from tests.conftest import make_quote
 
-    settings.mid_spread_max_bps = 15
     settings.strategy_lookback = 3
     settings.strategy_entry_deviation_bps = 1
     worker = PaperWorker(settings, clock, ledger)
+    worker.strategy.mids.extend([1_160_000, 1_160_000, 1_160_000])
+    before = list(worker.strategy.mids)
     g2u = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g_wide", ask_units=1_160_000)
     u2g = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u_wide", offer_units=10_000_000, ask_units=7_000_000_000)
     with patch.object(worker.poller, "fetch_scope_inputs", return_value=_scope_inputs()):
@@ -156,8 +161,30 @@ def test_wide_spread_skips_candidate(settings, clock, ledger):
             summary = worker.cycle()
     assert summary["candidate_id"] is None
     assert summary["skip"] == "spread"
-    assert summary["mid_spread_bps"] is not None and summary["mid_spread_bps"] > 15
+    assert summary["mid_spread_bps"] is not None and summary["mid_spread_bps"] > settings.mid_spread_max_bps
+    assert list(worker.strategy.mids) == before
     assert ledger.load_signal_skips(clock.now().strftime("%Y-%m-%d"))["spread"] == 1
+    worker.close()
+
+
+def test_healthy_bid_ask_does_not_skip_spread(settings, clock, ledger):
+    from unittest.mock import patch
+
+    from ton_gram.models import Direction
+    from ton_gram.worker import PaperWorker
+    from tests.conftest import make_quote
+
+    worker = PaperWorker(settings, clock, ledger)
+    # ~40 bps bid/ask, typical of a 20 bps pool fee. Must stay under default 200.
+    g2u = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="g_ok", ask_units=1_160_000)
+    u2g = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="u_ok", offer_units=10_000_000, ask_units=8_580_000_000)
+    with patch.object(worker.poller, "fetch_scope_inputs", return_value=_scope_inputs()):
+        with patch.object(worker.poller, "fetch_quotes", return_value={Direction.GRAM_TO_USDT: g2u, Direction.USDT_TO_GRAM: u2g}):
+            summary = worker.cycle()
+    assert summary["skip"] != "spread"
+    assert summary["mid_spread_bps"] is not None
+    assert summary["mid_spread_bps"] < settings.mid_spread_max_bps
+    assert len(worker.strategy.mids) == 1
     worker.close()
 
 
@@ -219,11 +246,57 @@ class _FakeSton:
         }
 
 
-def test_fetch_quotes_size_matches_second_leg(settings, clock):
+def test_fetch_quotes_uses_last_mid_notional_not_ask(settings, clock):
     ston = _FakeSton()
     poller = MarketPoller(settings, clock, ston=ston, toncenter=None)
-    quotes = poller.fetch_quotes(official_pool())
+    poller.fetch_quotes(official_pool())
     assert ston.units[0] == settings.quote_offer_gram_nano
-    assert ston.units[1] == 1_160_000
-    assert quotes
+    assert ston.units[1] == settings.quote_offer_usdt_micro
+    ston.units.clear()
+    poller.fetch_quotes(official_pool(), size_usdt_micro=1_163_000)
+    assert ston.units[1] == 1_163_000
     poller.close()
+
+
+def test_recover_missing_quote_sends_settlement_halt(settings, clock, ledger):
+    from ton_gram.models import Candidate, Direction, RiskDecision, RiskVerdict
+    from ton_gram.worker import PaperWorker
+    from tests.conftest import make_quote
+
+    settings.telegram_enabled = True
+    settings.telegram_bot_token = "tok"
+    settings.telegram_chat_id = "1"
+    quote = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="q_missing")
+    cand = Candidate(
+        candidate_id="c_missing",
+        created_at_utc="2026-11-05T00:00:00Z",
+        direction=Direction.USDT_TO_GRAM,
+        offer_units=50_000_000,
+        quote_id=quote.quote_id,
+        mid_usdt_per_gram_micro=1_160_000,
+        sma_usdt_per_gram_micro=1_150_000,
+        deviation_bps=-80,
+        policy_version=settings.policy_version,
+        reason="test",
+    )
+    ledger.save_candidate(cand)
+    dec = RiskDecision(
+        decision_id="dec_missing",
+        candidate_id=cand.candidate_id,
+        quote_id=quote.quote_id,
+        policy_version=settings.policy_version,
+        verdict=RiskVerdict.APPROVE,
+        reasons=[],
+        reserved_usdt_micro=50_000_000,
+        created_at_utc="2026-11-05T00:00:00Z",
+    )
+    ledger.save_decision(dec)
+    ledger.create_paper_intent(cand, quote, dec)
+    ledger.conn.execute("DELETE FROM quotes")
+    ledger.conn.commit()
+    client = FakeClient()
+    worker = PaperWorker(settings, clock, ledger, alerter=TelegramAlerter(settings, ledger, client=client))
+    worker.recover_if_needed()
+    assert worker.ledger.halt_reason == "SETTLEMENT_UNKNOWN"
+    assert any("SETTLEMENT_UNKNOWN" in text for text in client.texts)
+    worker.close()
