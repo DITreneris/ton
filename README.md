@@ -162,7 +162,7 @@ If a snapshot bearer was ever pasted into chat, rotate it on Railway and treat t
 
 Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Alerts are deduplicated per key for `TON_GRAM_TELEGRAM_DEDUPE_S` seconds (default 1 hour). There is no inbound Telegram command surface (`/status`, `/profit`, `/stop` do nothing).
 
-One daily performance card is sent on the first successful cycle at or after `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6**, 08:00 Europe/Vilnius in winter). The success key is `daily_summary_sent_YYYY-MM-DD`. A failed send does not burn the day. Critical `halt` cards cover sticky reasons only (`OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`). A stale quote rejects the candidate; it does not latch halt.
+One daily performance card is sent on the first successful cycle at or after `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6** = 08:00 Europe/Vilnius in winter, 09:00 in summer). The success key is `daily_summary_sent_YYYY-MM-DD`. A failed send does not burn the day. Critical `halt` cards cover sticky reasons only (`OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`). A stale quote rejects the candidate; it does not latch halt. A feed-down keeps `HARD_HALT` and does not overwrite it with `SCOPE_MISMATCH`.
 
 Other keys: `incident`, `scope_fail`, `feed_down`, `missed_heartbeat`. Send one uncapped test message with `python -m ton_gram telegram-test`.
 
@@ -203,7 +203,7 @@ Backup `data/paper.sqlite3` regularly. This is the only durable store.
 
 Deterministic mid-deviation fade:
 
-1. Mid = average implied USD₮-micro per GRAM from both pinned quotes. The USD₮→GRAM simulate uses the USD₮ ask from the 1 GRAM leg so both notionals match. If `|mid_g2u − mid_u2g|` exceeds `TON_GRAM_MID_SPREAD_MAX_BPS` (default 15), the cycle skips (`skip=spread`) and does not emit a candidate.
+1. Mid = average implied USD₮-micro per GRAM from both pinned quotes. The USD₮→GRAM simulate is sized from the last mid × 1 GRAM (fallback `$10`), not from the GRAM ask, so a healthy bid/ask is not treated as a broken book. If `|mid_g2u − mid_u2g|` exceeds `TON_GRAM_MID_SPREAD_MAX_BPS` (default **200**), the cycle skips (`skip=spread`), does **not** append that print to the SMA, and does not emit a candidate.
 2. After `STRATEGY_LOOKBACK` samples, compare mid to SMA.
 3. If `|deviation| >= STRATEGY_ENTRY_DEVIATION_BPS`, emit a timestamped candidate fading the move.
 4. Risk must still approve it. Out-of-policy size, stale quotes, halt, or failed scope produce **zero intents**.
