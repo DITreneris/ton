@@ -16,7 +16,7 @@ from ton_gram.models import Direction, HaltReason, RiskVerdict
 from ton_gram.poller import MarketPoller, ProviderError
 from ton_gram.report import build_daily_report
 from ton_gram.risk import evaluate_risk, quote_age_ms, should_latch_halt
-from ton_gram.scope import verify_scope
+from ton_gram.scope import unavailable_scope, verify_scope
 from ton_gram.snapshot import build_snapshot
 from ton_gram.strategy import BaselineStrategy
 from ton_gram.telegram_text import format_daily_card, format_halt_card
@@ -135,7 +135,7 @@ class PaperWorker:
             feed_failed = True
             log.warning("provider failure: %s", exc)
             feed_health["stonfi_quotes"] = {"status": "DOWN", "latency_ms": None, "error": str(exc)}
-            scope = verify_scope(self.settings)
+            scope = unavailable_scope(self.settings, reason=str(exc))
             if self._latch(HaltReason.HARD_HALT):
                 self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
             self._alert("feed_down", f"Provider failure: {exc}")
@@ -211,7 +211,9 @@ class PaperWorker:
         if snapshot.get("incidents"):
             self._alert("incident", f"Snapshot incidents: {[i.get('code') for i in snapshot['incidents']]}")
         signal = self.strategy.signal_view(mid)
-        if wide_spread:
+        if feed_failed:
+            signal["skip"] = "feed_down"
+        elif wide_spread:
             signal["skip"] = "spread"
         signal["mid_g2u_usdt_per_gram_micro"] = mid_g2u
         signal["mid_u2g_usdt_per_gram_micro"] = mid_u2g
@@ -230,6 +232,7 @@ class PaperWorker:
             "candidate_id": candidate.candidate_id if candidate else None,
             "intent_id": intent.intent_id if intent else None,
             "halt": self.ledger.entry_halt,
+            "halt_reason": self.ledger.halt_reason,
             "mid_usdt_per_gram_micro": mid,
             "skip": skip,
             "samples": signal["samples"],
