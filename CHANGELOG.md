@@ -81,3 +81,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `paper-policy` v8 changed: sticky halt is one incident; 07:28 Vilnius reset was paper genesis
 - `lessons` v6 changed: feed_down is not warming; Railway stderr is not a crash; cycle prints halt_reason
 - `paper-policy` v9 changed: feed_down is not warming; Railway stderr is not a crash; cycle prints halt_reason
+- `lessons` v7 changed: live LIMIT_BREACH on cycle line; Railway boots every GitHub commit
+- `paper-policy` v10 changed: live LIMIT_BREACH on cycle line; Railway boots every GitHub commit

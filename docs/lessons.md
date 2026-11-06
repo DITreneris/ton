@@ -10,6 +10,8 @@ Evidence **2026-11-05 10:55 Europe/Vilnius** (Railway after the `ROADMAP.md` ima
 
 Same day **15:25–15:34 Europe/Vilnius**: still `scope=PASS`, spread **20 bps**, deviation mostly 0–7, one dip to **−17**. All `skip=flat` until the 25 bps print. The quiet stretch is still the baseline, not a broken book.
 
+**2026-11-06 13:51–14:03 Europe/Vilnius**: halt already True, recover empty, SMA 8/8, spread 20–21 bps, deviation **−9 to +7**. Still `skip=flat`, still no candidate. A halted quiet book is the same baseline. Do not rearm to manufacture fill 2/8.
+
 ## daily_loss_marks_inventory
 
 `daily_loss_limit` marks the **whole paper wallet** (genesis 5 000 GRAM + 5 000 USD₮), not the last clip. Floor is 1% of the $10k funding cap = **$100** = **~$0.02 / GRAM**. At `$1.16` that is about **170 bps**, not 20. A 20 000-micro mid tick is $0.02; relative to price it is ~170 bps.
@@ -63,6 +65,8 @@ A test must fail on glob excludes, not only on exact-name excludes.
 
 Railway builds GitHub `main`, not the laptop tree. `python -m ton_gram docs` and `COPY ROADMAP.md` can work locally and fail in the image. After a review-fix, push the same files GitHub will pack: source, `.dockerignore`, and every `COPY` path.
 
+Each GitHub commit on `main` is a Railway boot. See `railway_boots_every_github_commit`.
+
 ## all_in_cost_gate
 
 Fee + impact + 50 bps slip above `max_all_in_cost_bps` (80) is a reject, not a missing trade. Do not raise the cap or lower 25 bps. Inspect `rejected_candidates_by_reason`.
@@ -85,6 +89,16 @@ Evidence **2026-11-06 12:28 and 12:37 Europe/Vilnius** (Railway CSV `09:30:33Z`�
 
 Python logging defaulted to stderr. Railway labels every stderr line `severity=error`. The 6 Nov dump tagged 519 INFO cycle lines as errors. Worker INFO/WARNING now go to stdout; ERROR stays on stderr. Do not page on a Railway error count that matches the cycle count.
 
+Confirmed **2026-11-06 13:55+ Europe/Vilnius** (image `079c099`): cycle lines are Railway `info`, not `error`.
+
 ## cycle_must_print_halt_reason
 
 `halt=True` without `halt_reason` is not enough. The 6 Nov dump is 509 halted cycles and never says `LIMIT_BREACH` on the cycle line. Trust `open_execution_state.halt_reason` on the snapshot, and the cycle dict, not the Railway severity column.
+
+A cycle dict that omits `halt_reason` is an **older image**, not a missing latch. Evidence **2026-11-06 13:51 Europe/Vilnius**: boot `20fdedc` (stdout logging only) printed `halt=True` with no reason. From **13:55** (`snap_20261106T115537Z_7037`, image `079c099`) every cycle is `halt_reason=LIMIT_BREACH`. Do not rearm because the field appeared. That is the same 16:04 latch from 5 Nov.
+
+## railway_boots_every_github_commit
+
+Railway auto-deploys **every** GitHub `main` commit. `push_files` of N files as N commits is N container restarts. Judge the **SUCCESS deploy of the tip SHA**, not the first `Starting Container` in the storm.
+
+Evidence **2026-11-06 13:50–13:57 Europe/Vilnius**: ten GitHub commits in six minutes (`20fdedc` … `079c099`) produced ten Railway deploys. The operator paste at 13:51 was the logutil-only boot: recover empty, halt True, no `halt_reason`. Live SUCCESS is `458e438d` / `079c099`. Halt and SMA survived every restart (`outcomes=[]`, samples 8/8). Batch GitHub pushes into **one** commit when you can. Do not `reset-paper` because the box restarted.

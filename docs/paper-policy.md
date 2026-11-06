@@ -32,6 +32,8 @@ The Grok snapshot maps `HARD_HALT`/`OPERATOR` → `reason_code=HARD_HALT` and ev
 
 A provider 500 is `skip=feed_down` and `scope=UNAVAILABLE`. It must not look like SMA `warming` or `SCOPE_MISMATCH`. Cycle logs include `halt_reason`. Worker INFO goes to stdout so Railway does not tag a healthy cycle as `severity=error`.
 
+Railway boots every GitHub `main` commit. Score the SUCCESS deploy of the tip SHA. A cycle line missing `halt_reason` is an older image, not a missing latch. Do not reset-paper because the box restarted.
+
 ## Learn and reset
 
 `learn` scores the live `Settings` into `rules_used`. It still forces `signing=false` and will not recommend lowering 25 bps or raising `max_all_in_cost_bps`. `reset-paper` wipes fills and also clears `learn_last_json` so a reset day does not keep yesterday’s score.
