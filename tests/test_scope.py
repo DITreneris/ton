@@ -1,5 +1,5 @@
 from ton_gram.config import Settings
-from ton_gram.scope import verify_scope
+from ton_gram.scope import unavailable_scope, verify_scope
 from tests.conftest import (
     lookalike_usdt_address,
     native_gram_asset,
@@ -77,3 +77,10 @@ def test_wrong_pool_fails(settings: Settings):
         quotes=_quotes(),
     )
     assert not scope.passed
+
+
+def test_unavailable_scope_is_not_a_fail(settings: Settings):
+    scope = unavailable_scope(settings, reason="STON.fi 500")
+    assert scope.status == "UNAVAILABLE"
+    assert scope.passed is False
+    assert scope.checks[0].name == "feed"

@@ -1,41 +1,41 @@
 {
   "schema_version": "1.0",
-  "updated_utc": "2026-11-05T14:17:36Z",
+  "updated_utc": "2026-11-06T11:49:38Z",
   "documents": [
     {
       "id": "document-system",
       "title": "Document system",
       "path": "document-system.md",
-      "version": 4,
-      "sha256": "4d5fd987bb695c2daa7d52d15b102295e70c12fabca4b7656cf0edadaa4f24e8",
-      "updated_utc": "2026-11-05T08:57:45Z",
+      "version": 5,
+      "sha256": "a4530281587fe071fa6e7420031a94fe8d061d34f7a9499eb197b2d2f839b0b9",
+      "updated_utc": "2026-11-05T14:20:27Z",
       "status": "current"
     },
     {
       "id": "learning-loop",
       "title": "Learning loop",
       "path": "learning-loop.md",
-      "version": 5,
-      "sha256": "a549cfa06df37341e56b469287b4e333a9a3c71df7cf89e500f6abe3f273a60c",
-      "updated_utc": "2026-11-05T14:17:36Z",
+      "version": 6,
+      "sha256": "1e4afcf4807bd741c65f27c0c4029cbb4b0c4c7359ea556ebad18fa6d79598a1",
+      "updated_utc": "2026-11-06T05:15:01Z",
       "status": "current"
     },
     {
       "id": "lessons",
       "title": "Operator lessons",
       "path": "lessons.md",
-      "version": 3,
-      "sha256": "ae73ffe4cbc1f1785188bd795e219a28ad1569cfaa609418bd39f01fa37e4afe",
-      "updated_utc": "2026-11-05T14:17:36Z",
+      "version": 6,
+      "sha256": "23b56f93fe2305b06451be1c963867aec0b781ed6cd4a270f09feed3018a0936",
+      "updated_utc": "2026-11-06T11:49:38Z",
       "status": "current"
     },
     {
       "id": "paper-policy",
       "title": "Paper policy",
       "path": "paper-policy.md",
-      "version": 5,
-      "sha256": "c804c750c2fe9362f54e06b55d4fb252421f6281abf3ea30c5994e0c5c03a477",
-      "updated_utc": "2026-11-05T14:17:36Z",
+      "version": 9,
+      "sha256": "e8d92244fa1ba047309e9ad88979260832133f6d51fc457e2aa0e3f41bcf6093",
+      "updated_utc": "2026-11-06T11:49:38Z",
       "status": "current"
     },
     {
@@ -51,9 +51,9 @@
       "id": "roadmap",
       "title": "ROADMAP \u2014 self-sustaining profitable TON GRAM bot",
       "path": "roadmap.md",
-      "version": 4,
-      "sha256": "1d17d096b8c123e5c40fd4c95d5711059520db778a44b6d6c9369cc1e80bd631",
-      "updated_utc": "2026-11-05T14:17:36Z",
+      "version": 6,
+      "sha256": "f036a9faca050b2bd5f15b27f0440071167e031012865bf8facb3725efa1c3df",
+      "updated_utc": "2026-11-06T05:15:01Z",
       "status": "current"
     }
   ]
