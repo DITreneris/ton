@@ -136,12 +136,12 @@ class PaperWorker:
             log.warning("provider failure: %s", exc)
             feed_health["stonfi_quotes"] = {"status": "DOWN", "latency_ms": None, "error": str(exc)}
             scope = verify_scope(self.settings)
-            if self.ledger.latch_halt(HaltReason.HARD_HALT):
+            if self._latch(HaltReason.HARD_HALT):
                 self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
             self._alert("feed_down", f"Provider failure: {exc}")
 
         if not scope.passed and not feed_failed:
-            if self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH):
+            if self._latch(HaltReason.SCOPE_MISMATCH):
                 self._alert("halt", format_halt_card("SCOPE_MISMATCH", f"Scope failed closed: {scope.status}"))
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
             self._alert("incident", "Scope verification failed closed")
@@ -177,7 +177,7 @@ class PaperWorker:
                 )
                 self.ledger.save_decision(decision)
                 if should_latch_halt(decision):
-                    if self.ledger.latch_halt(HaltReason.LIMIT_BREACH):
+                    if self._latch(HaltReason.LIMIT_BREACH):
                         self._alert(
                             "halt",
                             format_halt_card("LIMIT_BREACH", f"Risk latched halt: {decision.reasons}"),
@@ -274,6 +274,18 @@ class PaperWorker:
         if age > self.settings.heartbeat_miss_s:
             log.info("stale heartbeat on boot age=%ss; refreshing without alert", int(age))
             self.ledger.record_heartbeat()
+
+    def _latch(self, reason: HaltReason | str) -> bool:
+        """Latch halt. First reason wins. Restores prior if an older ledger overwrote it."""
+        already = self.ledger.entry_halt
+        prior = self.ledger.halt_reason
+        changed = self.ledger.latch_halt(reason)
+        if changed is None and already and prior:
+            upgrade = str(reason) == HaltReason.SETTLEMENT_UNKNOWN.value and prior != str(reason)
+            if not upgrade and self.ledger.halt_reason != prior:
+                self.ledger.set_control("halt_reason", prior)
+            return (not already) or upgrade
+        return bool(changed)
 
     def _alert(self, key: str, text: str) -> None:
         try:
