@@ -22,9 +22,15 @@ Restart recovery uses the same clock as `settle_due_intents`:
 
 ## Halt
 
-Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`. Rearm is manual. A feed-down keeps `HARD_HALT` and does not overwrite it with `SCOPE_MISMATCH`.
+Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`. Rearm is manual. **First reason wins until rearm.** A later STON.fi 500 is recorded as `latch_ignored` and must not rewrite `halt_reason`. `SETTLEMENT_UNKNOWN` is the only upgrade.
 
-`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~**170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`. Do not rearm to manufacture fills.
+The Grok snapshot maps `HARD_HALT`/`OPERATOR` → `reason_code=HARD_HALT` and every other latched reason → `LIMIT_BREACH`. Read `open_execution_state.halt_reason`, not only the envelope.
+
+`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~**170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`.
+
+`daily_pnl` resets on the first mark of the new UTC day. **Drawdown vs peak equity does not.** A green daily P&L after midnight does not make rearm safe if `drawdown_limit` would still fire. Do not rearm to manufacture fills.
+
+A provider 500 is `skip=feed_down` and `scope=UNAVAILABLE`. It must not look like SMA `warming` or `SCOPE_MISMATCH`. Cycle logs include `halt_reason`. Worker INFO goes to stdout so Railway does not tag a healthy cycle as `severity=error`.
 
 ## Learn and reset
 
@@ -32,4 +38,4 @@ Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, 
 
 ## Telegram
 
-Outbound only. No inbound commands. Record an alert only after a successful send.
+Outbound only. No inbound commands. Record an alert only after a successful send. A successful daily card does not log a send-failure note. If Railway ever printed a full `api.telegram.org/bot…` URL, rotate `TON_GRAM_TELEGRAM_BOT_TOKEN`.
