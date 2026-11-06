@@ -5,6 +5,8 @@ from ton_gram.alerts import TelegramAlerter
 from ton_gram.clock import format_utc
 from ton_gram.models import HaltReason
 from ton_gram.poller import ProviderError
+from ton_gram.scope import unavailable_scope
+from ton_gram.snapshot import build_snapshot
 from ton_gram.worker import PaperWorker
 from tests.test_alerts import FakeClient
 
@@ -55,6 +57,20 @@ def test_utc_rollover_clears_daily_pnl_not_drawdown(settings, clock, ledger):
     assert first.peak_equity_usdt_micro == bounced.peak_equity_usdt_micro
 
 
+def test_worker_restores_reason_when_old_ledger_returns_none(settings, clock, ledger):
+    ledger.latch_halt(HaltReason.LIMIT_BREACH)
+    worker = PaperWorker(settings, clock, ledger)
+
+    def overwrite(reason):
+        ledger.set_control("halt_reason", str(reason))
+        return None
+
+    worker.ledger.latch_halt = overwrite  # type: ignore[method-assign]
+    assert worker._latch(HaltReason.HARD_HALT) is False
+    assert worker.ledger.halt_reason == "LIMIT_BREACH"
+    worker.close()
+
+
 def test_feed_down_does_not_overwrite_limit_breach(settings, clock, ledger):
     settings.telegram_enabled = True
     settings.telegram_bot_token = "tok"
@@ -63,9 +79,27 @@ def test_feed_down_does_not_overwrite_limit_breach(settings, clock, ledger):
     client = FakeClient()
     worker = PaperWorker(settings, clock, ledger, alerter=TelegramAlerter(settings, ledger, client=client))
     with patch.object(worker.poller, "fetch_scope_inputs", side_effect=ProviderError("offline")):
-        worker.cycle()
+        summary = worker.cycle()
     assert worker.ledger.halt_reason == "LIMIT_BREACH"
     assert worker.ledger.entry_halt is True
+    assert summary["skip"] == "feed_down"
+    assert summary["scope"] == "UNAVAILABLE"
+    assert summary["halt_reason"] == "LIMIT_BREACH"
     assert any("HARD_HALT" in t for t in client.texts) is False
     assert any("Provider failure" in t for t in client.texts)
+    assert ledger.load_signal_skips(format_utc(clock.now())[:10])["feed_down"] == 1
     worker.close()
+
+
+def test_unavailable_scope_does_not_emit_scope_mismatch(settings, clock, ledger):
+    snap = build_snapshot(
+        settings=settings,
+        clock=clock,
+        ledger=ledger,
+        scope=unavailable_scope(settings, reason="STON.fi 500"),
+        quotes={},
+        mid_usdt_per_gram_micro=0,
+        feed_health={"stonfi_quotes": {"status": "DOWN", "latency_ms": None}},
+    )
+    assert "SCOPE_MISMATCH" not in [item["code"] for item in snap["incidents"]]
+    assert snap["scope_verification"]["status"] == "UNAVAILABLE"

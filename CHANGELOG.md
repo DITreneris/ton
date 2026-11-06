@@ -48,6 +48,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `lessons` v3 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
 - `paper-policy` v5 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
 - `roadmap` v4 changed: correct daily-loss math: ~170 bps / $0.02 per GRAM; halt only on candidate
+- `document-system` v5 changed: evidence-gated roadmap: open the next phase the day the table is green
+- `paper-policy` v6 changed: evidence-gated roadmap: open the next phase the day the table is green
+- `roadmap` v5 changed: evidence-gated roadmap: open the next phase the day the table is green
 
 ## 2026-11-04
 
@@ -59,3 +62,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - `counts()` binding, Telegram 404 burning the daily key, SMA reset on deploy, first-cycle missed heartbeat.
+
+## 2026-11-06
+
+### Fixed
+
+- Feed-down cycles skip as `feed_down` with `scope=UNAVAILABLE`, not SMA `warming` / `SCOPE_MISMATCH`.
+- Cycle summary includes `halt_reason`.
+- Worker INFO/WARNING log to stdout so Railway does not tag healthy cycles as `severity=error`.
+
+### Documents
+
+- `learning-loop` v6 changed: first latch wins; drawdown does not reset at UTC midnight; do not rearm on HARD_HALT flip
+- `lessons` v4 changed: first latch wins; drawdown does not reset at UTC midnight; do not rearm on HARD_HALT flip
+- `paper-policy` v7 changed: first latch wins; drawdown does not reset at UTC midnight; do not rearm on HARD_HALT flip
+- `roadmap` v6 changed: first latch wins; drawdown does not reset at UTC midnight; do not rearm on HARD_HALT flip
+- `lessons` v5 changed: sticky halt is one incident; 07:28 Vilnius reset was paper genesis
+- `paper-policy` v8 changed: sticky halt is one incident; 07:28 Vilnius reset was paper genesis
+- `lessons` v6 changed: feed_down is not warming; Railway stderr is not a crash; cycle prints halt_reason
+- `paper-policy` v9 changed: feed_down is not warming; Railway stderr is not a crash; cycle prints halt_reason

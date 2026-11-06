@@ -48,7 +48,10 @@ def rules_from_settings(settings: Settings | None = None) -> dict[str, Any]:
 
 
 def _skip_total(skips: dict[str, Any]) -> int:
-    return sum(int(skips.get(k) or 0) for k in ("warming", "flat", "cooldown", "spread", "emitted", "approved", "fired"))
+    return sum(
+        int(skips.get(k) or 0)
+        for k in ("warming", "flat", "cooldown", "spread", "feed_down", "emitted", "approved", "fired")
+    )
 
 
 def inventory_mark_dominates(realized_usdt_micro: int, unrealized_usdt_micro: int) -> bool:
