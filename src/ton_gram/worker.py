@@ -136,15 +136,15 @@ class PaperWorker:
             log.warning("provider failure: %s", exc)
             feed_health["stonfi_quotes"] = {"status": "DOWN", "latency_ms": None, "error": str(exc)}
             scope = verify_scope(self.settings)
-            self.ledger.latch_halt(HaltReason.HARD_HALT)
+            if self.ledger.latch_halt(HaltReason.HARD_HALT):
+                self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
             self._alert("feed_down", f"Provider failure: {exc}")
-            self._alert("halt", format_halt_card("HARD_HALT", f"Provider failure: {exc}"))
 
         if not scope.passed and not feed_failed:
-            self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH)
+            if self.ledger.latch_halt(HaltReason.SCOPE_MISMATCH):
+                self._alert("halt", format_halt_card("SCOPE_MISMATCH", f"Scope failed closed: {scope.status}"))
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
             self._alert("incident", "Scope verification failed closed")
-            self._alert("halt", format_halt_card("SCOPE_MISMATCH", f"Scope failed closed: {scope.status}"))
 
         self.ledger.settle_due_intents(mid or 0)
 
@@ -177,9 +177,12 @@ class PaperWorker:
                 )
                 self.ledger.save_decision(decision)
                 if should_latch_halt(decision):
-                    self.ledger.latch_halt(HaltReason.LIMIT_BREACH)
-                    self._alert("halt", format_halt_card("LIMIT_BREACH", f"Risk latched halt: {decision.reasons}"))
-                    self._alert("incident", f"Limit incident: {decision.reasons}")
+                    if self.ledger.latch_halt(HaltReason.LIMIT_BREACH):
+                        self._alert(
+                            "halt",
+                            format_halt_card("LIMIT_BREACH", f"Risk latched halt: {decision.reasons}"),
+                        )
+                        self._alert("incident", f"Limit incident: {decision.reasons}")
                 if decision.verdict is RiskVerdict.APPROVE:
                     intent = self.ledger.create_paper_intent(candidate, quote, decision)
                     log.info("reserved paper intent %s", intent.intent_id)
