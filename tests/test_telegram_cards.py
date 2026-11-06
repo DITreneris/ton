@@ -43,7 +43,7 @@ def test_daily_card_uses_report_fields():
     assert "Net P&L: $0.00" in text
     assert "Unrealized (mark): -$0.30" in text
     assert "Drawdown: $40.00 (0.40% of $10000 cap)" in text
-    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / emitted 0 / approved 0" in text
+    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / feed_down 0 / emitted 0 / approved 0" in text
     assert "Feed: stonfi_quotes UP 100.0%" in text
 
 
