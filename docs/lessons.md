@@ -18,9 +18,32 @@ Risk only evaluates this when a **candidate** exists. Flat cycles can sit under 
 
 A sticky halt after `candidate rejected: ['daily_loss_limit']` is inventory mark when unrealized PnL is the loss driver. Do not treat it as a blown $1 fade. Do not rearm to manufacture the next fill. Do not lower 25 bps. Do not raise the all-in cap.
 
-Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~ **200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
+Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~**200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
 
 Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so ~170 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
+
+## halt_reason_first_latch_wins
+
+`latch_halt` used to overwrite the visible reason every cycle. That is why a recovered book can show `HARD_HALT` with feeds UP.
+
+Evidence **2026-11-06 Europe/Vilnius**:
+
+- 16:04 on 5 Nov: `LIMIT_BREACH` on `daily_loss_limit`. Operator did not rearm.
+- Overnight STON.fi `POST /v1/swap/simulate` **500**s at 00:06, 01:10, 01:47, **02:14**, 03:08. Each one wrote `HARD_HALT` over the limit card.
+- 02:20 check (`snap_20261106T002031Z_4424`): feeds UP, no open swap, reason `HARD_HALT`. The 500 at 02:14 had already recovered. Daily P&L **+$32.53** is 5 000 GRAM × ~$0.0065 vs **today's** UTC start-of-day, not a failed midnight reset. Confirmed at 02:02: reject reasons were `entry_halt` + `drawdown_limit` — `daily_loss_limit` was already gone.
+- 06:44: next 25 bps print, `candidate rejected: ['entry_halt', 'drawdown_limit']`, reason flipped back to `LIMIT_BREACH`. Seen at 07:07 (`snap_20261106T050732Z_5500`).
+
+Do not rearm because the reason flipped. Peak drawdown does not reset at midnight. The next candidate will latch again while equity is still ≥$300 under peak. A recovered STON.fi 500 is an **explained** feed blip for Phase 0; do not restart the 7-day clock. Do not `reset-paper`.
+
+Hourly Grok `INCIDENT` while this halt is sticky is **one event**, not a new incident each hour. Evidence **5–6 Nov**: 18 of 24 hourly checks flagged, almost all `LIMIT_BREACH`, feeds ≥99.93%. That is the same latch. Six `NO_FLAG` hours were the pre-16:04 window. Do not rearm to make the monitor go green.
+
+## reset_was_genesis_not_the_fill
+
+`POST /v1/control/reset` at **2026-11-05 07:28 Europe/Vilnius** (`05:28:40Z`, HTTP 200) wiped the early halt and restored genesis balances. Recover on that boot had **no** unresolved intents (`outcomes=[]`). The 15:34 fill `int_20261105T133435Z_1971` is after that reset and still counts as fill 1/8. Do not reset again to chase a green card.
+
+## utc_sod_mark_is_not_zero_all_day
+
+The first successful mark after 00:00 UTC sets start-of-day equity and `daily_pnl=0`. Twenty minutes later, 5 000 GRAM × a $0.0065 tick is **+$32.53**. That is inventory mark, not a bug and not a reason to rearm.
 
 ## audit_fills_after_costs
 
@@ -51,3 +74,17 @@ Restart uses the same delay/TTL as `settle_due_intents`. Early recover is `PENDI
 ## keys_are_phase_3
 
 Phase 2 is a paper go / no-go. Keys stay out of this tree until Phase 3 is explicitly opened.
+
+## feed_down_is_not_warming
+
+A STON.fi `POST /v1/swap/simulate` 500 is `skip=feed_down` and `scope=UNAVAILABLE`. It is not SMA warming and it is not `SCOPE_MISMATCH`. SMA samples stay 8/8; the next healthy cycle is `skip=flat`. Do not restart the 7-day clock on an explained blip.
+
+Evidence **2026-11-06 12:28 and 12:37 Europe/Vilnius** (Railway CSV `09:30:33Z`–`11:45:35Z`): 509 cycles, halt True the whole window, 507 `skip=flat` / `scope=PASS`. Two simulate 500s logged `skip=warming` / `scope=FAIL` because `signal_view(mid=0)` reused the warming bucket and empty `verify_scope()` failed closed. Both recovered on the next cycle (~8–20s). Max |deviation| was **21 bps** (13:26 Vilnius). Zero candidates. That is a quiet halted book, not a broken SMA.
+
+## railway_info_on_stderr_is_not_a_crash
+
+Python logging defaulted to stderr. Railway labels every stderr line `severity=error`. The 6 Nov dump tagged 519 INFO cycle lines as errors. Worker INFO/WARNING now go to stdout; ERROR stays on stderr. Do not page on a Railway error count that matches the cycle count.
+
+## cycle_must_print_halt_reason
+
+`halt=True` without `halt_reason` is not enough. The 6 Nov dump is 509 halted cycles and never says `LIMIT_BREACH` on the cycle line. Trust `open_execution_state.halt_reason` on the snapshot, and the cycle dict, not the Railway severity column.
