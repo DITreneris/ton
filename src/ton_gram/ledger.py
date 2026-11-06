@@ -225,14 +225,33 @@ class Ledger:
     def halt_reason(self) -> str:
         return self.get_control("halt_reason")
 
-    def latch_halt(self, reason: HaltReason | str) -> None:
+    def latch_halt(self, reason: HaltReason | str) -> bool:
+        """Sticky halt. First reason wins until rearm.
+
+        Later feed 500s and limit re-checks are recorded as ``latch_ignored``
+        and must not rewrite ``halt_reason``. ``SETTLEMENT_UNKNOWN`` is the
+        only upgrade: a missing quote is worse than a limit card.
+
+        Returns True when this call set or upgraded the visible reason.
+        """
+        reason_s = str(reason)
+        already = self.entry_halt
+        prior = self.halt_reason
+        upgrade = reason_s == HaltReason.SETTLEMENT_UNKNOWN.value and prior != reason_s
         self.set_control("entry_halt", "1")
-        self.set_control("halt_reason", str(reason))
+        if not already or upgrade:
+            self.set_control("halt_reason", reason_s)
+            action = "latch_upgrade" if already and upgrade else "latch"
+            changed = True
+        else:
+            action = "latch_ignored"
+            changed = False
         self.conn.execute(
             "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
-            (format_utc(self.clock.now()), "latch", str(reason)),
+            (format_utc(self.clock.now()), action, reason_s),
         )
         self.conn.commit()
+        return changed
 
     def rearm(self) -> None:
         self.set_control("entry_halt", "0")
@@ -470,12 +489,17 @@ class Ledger:
         self._close_intent(intent_id, IntentStatus.REJECTED, notes)
 
     def recover(self) -> list[dict[str, Any]]:
-        """Reconcile every reserved intent before the worker accepts new ones."""
+        """Reconcile reserved intents. Same delay/TTL clock as settle_due_intents.
+
+        Missing quote → SETTLEMENT_UNKNOWN. TTL lapse → EXPIRED (no halt).
+        Delay not elapsed → leave RESERVED for settle_due. Do not fill early.
+        """
         outcomes: list[dict[str, Any]] = []
+        now = self.clock.now()
         for intent in self.unresolved_intents():
             quote = self.get_quote(intent.quote_id)
-            now = self.clock.now()
             expired = now >= parse_utc(intent.expires_at_utc)
+            due = parse_utc(intent.created_at_utc) + timedelta(seconds=self.settings.delay_stress_s)
             if quote is None:
                 self._close_intent(intent.intent_id, IntentStatus.RECONCILED_UNKNOWN, "missing_quote")
                 self.latch_halt(HaltReason.SETTLEMENT_UNKNOWN)
@@ -484,6 +508,9 @@ class Ledger:
             if expired:
                 self.expire_intent(intent.intent_id, "restart_expired")
                 outcomes.append({"intent_id": intent.intent_id, "status": "EXPIRED"})
+                continue
+            if now < due:
+                outcomes.append({"intent_id": intent.intent_id, "status": "PENDING_DELAY"})
                 continue
             fill = simulate_fill(
                 fill_id=self.next_id("fill"),
@@ -677,6 +704,7 @@ class Ledger:
             "flat": 0,
             "cooldown": 0,
             "spread": 0,
+            "feed_down": 0,
             "emitted": 0,
             "approved": 0,
         }
@@ -755,6 +783,7 @@ class Ledger:
         self.set_control("halt_reason", "")
         self.set_control("recovered", "0")
         self.set_control("strategy_state_json", "")
+        self.set_control("learn_last_json", "")
         stale_skips = self.conn.execute(
             "SELECT k FROM control_state WHERE k LIKE 'signal_skips_%'"
         ).fetchall()
@@ -780,26 +809,26 @@ class Ledger:
 
 
 def _quote_from_payload(payload: dict[str, Any]) -> Quote:
-    payload = dict(payload)
-    payload["direction"] = Direction(payload["direction"])
-    payload.pop("usdt_per_gram_micro", None)
-    return Quote(**payload)
+        payload = dict(payload)
+        payload["direction"] = Direction(payload["direction"])
+        payload.pop("usdt_per_gram_micro", None)
+        return Quote(**payload)
 
 
 def _intent_from_row(row: sqlite3.Row) -> Intent:
-    return Intent(
-        intent_id=row["intent_id"],
-        wallet_id=row["wallet_id"],
-        candidate_id=row["candidate_id"],
-        quote_id=row["quote_id"],
-        policy_version=row["policy_version"],
-        decision_id=row["decision_id"],
-        direction=Direction(row["direction"]),
-        offer_units=row["offer_units"],
-        reserved_usdt_micro=row["reserved_usdt_micro"],
-        status=IntentStatus(row["status"]),
-        created_at_utc=row["created_at_utc"],
-        expires_at_utc=row["expires_at_utc"],
-        terminal_at_utc=row["terminal_at_utc"],
-        notes=row["notes"],
-    )
+        return Intent(
+            intent_id=row["intent_id"],
+            wallet_id=row["wallet_id"],
+            candidate_id=row["candidate_id"],
+            quote_id=row["quote_id"],
+            policy_version=row["policy_version"],
+            decision_id=row["decision_id"],
+            direction=Direction(row["direction"]),
+            offer_units=row["offer_units"],
+            reserved_usdt_micro=row["reserved_usdt_micro"],
+            status=IntentStatus(row["status"]),
+            created_at_utc=row["created_at_utc"],
+            expires_at_utc=row["expires_at_utc"],
+            terminal_at_utc=row["terminal_at_utc"],
+            notes=row["notes"],
+        )
