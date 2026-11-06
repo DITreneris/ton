@@ -809,26 +809,26 @@ class Ledger:
 
 
 def _quote_from_payload(payload: dict[str, Any]) -> Quote:
-        payload = dict(payload)
-        payload["direction"] = Direction(payload["direction"])
-        payload.pop("usdt_per_gram_micro", None)
-        return Quote(**payload)
+    payload = dict(payload)
+    payload["direction"] = Direction(payload["direction"])
+    payload.pop("usdt_per_gram_micro", None)
+    return Quote(**payload)
 
 
 def _intent_from_row(row: sqlite3.Row) -> Intent:
-        return Intent(
-            intent_id=row["intent_id"],
-            wallet_id=row["wallet_id"],
-            candidate_id=row["candidate_id"],
-            quote_id=row["quote_id"],
-            policy_version=row["policy_version"],
-            decision_id=row["decision_id"],
-            direction=Direction(row["direction"]),
-            offer_units=row["offer_units"],
-            reserved_usdt_micro=row["reserved_usdt_micro"],
-            status=IntentStatus(row["status"]),
-            created_at_utc=row["created_at_utc"],
-            expires_at_utc=row["expires_at_utc"],
-            terminal_at_utc=row["terminal_at_utc"],
-            notes=row["notes"],
-        )
+    return Intent(
+        intent_id=row["intent_id"],
+        wallet_id=row["wallet_id"],
+        candidate_id=row["candidate_id"],
+        quote_id=row["quote_id"],
+        policy_version=row["policy_version"],
+        decision_id=row["decision_id"],
+        direction=Direction(row["direction"]),
+        offer_units=row["offer_units"],
+        reserved_usdt_micro=row["reserved_usdt_micro"],
+        status=IntentStatus(row["status"]),
+        created_at_utc=row["created_at_utc"],
+        expires_at_utc=row["expires_at_utc"],
+        terminal_at_utc=row["terminal_at_utc"],
+        notes=row["notes"],
+    )
