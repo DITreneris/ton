@@ -6,9 +6,9 @@ from typing import Any
 
 from ton_gram.clock import Clock, format_utc, parse_utc
 from ton_gram.config import Settings
-from ton_gram.learn import load_learn
 from ton_gram.ledger import Ledger
 from ton_gram.models import Direction, Quote, ScopeVerification, to_plain
+from ton_gram.learn import load_learn
 from ton_gram.risk import quote_age_ms
 
 
@@ -51,7 +51,7 @@ def build_snapshot(
     stale = (not both) or max_age > settings.max_quote_age_ms
 
     incidents: list[dict[str, Any]] = []
-    if not scope.passed:
+    if not scope.passed and scope.status != "UNAVAILABLE":
         incidents.append(
             {
                 "code": "SCOPE_MISMATCH",

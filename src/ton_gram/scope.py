@@ -26,6 +26,29 @@ def _check(name: str, passed: bool, detail: str) -> ScopeCheck:
     return ScopeCheck(name=name, passed=passed, detail=detail)
 
 
+def unavailable_scope(settings: Settings, *, reason: str = "provider failure") -> ScopeVerification:
+    """Feed is down. Identity was not re-checked. Do not call this a SCOPE_MISMATCH."""
+    return ScopeVerification(
+        status="UNAVAILABLE",
+        network=settings.network,
+        usdt_jetton_master=OFFICIAL_USDT_JETTON_MASTER,
+        usdt_issuer="tether",
+        native_asset="GRAM",
+        native_gram_address=settings.native_gram_address,
+        router=PINNED_ROUTER_ADDRESS,
+        pool=PINNED_POOL_ADDRESS,
+        pton_master=PINNED_PTON_MASTER,
+        pton_wallet=PINNED_PTON_WALLET,
+        router_major_version=PINNED_ROUTER_MAJOR,
+        router_minor_version=PINNED_ROUTER_MINOR,
+        router_type=PINNED_ROUTER_TYPE,
+        pton_version=settings.pton_version,
+        declared_opcodes=dict(DECLARED_OPCODES),
+        checks=[_check("feed", False, reason)],
+        fail_closed=True,
+    )
+
+
 def verify_scope(
     settings: Settings,
     *,
