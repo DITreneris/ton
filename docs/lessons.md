@@ -12,6 +12,8 @@ Same day **15:25–15:34 Europe/Vilnius**: still `scope=PASS`, spread **20 bps**
 
 **2026-11-06 13:51–14:03 Europe/Vilnius**: halt already True, recover empty, SMA 8/8, spread 20–21 bps, deviation **−9 to +7**. Still `skip=flat`, still no candidate. A halted quiet book is the same baseline. Do not rearm to manufacture fill 2/8.
 
+**2026-11-08 12:21–16:45 Europe/Vilnius**: 984 `flat` / 6 `cooldown` / 3 emitted. Between prints the book is still quiet. The three prints are `halted_print_is_not_fill_two`, not a retune.
+
 ## daily_loss_marks_inventory
 
 `daily_loss_limit` marks the **whole paper wallet** (genesis 5 000 GRAM + 5 000 USD₮), not the last clip. Floor is 1% of the $10k funding cap = **$100** = **~$0.02 / GRAM**. At `$1.16` that is about **170 bps**, not 20. A 20 000-micro mid tick is $0.02; relative to price it is ~170 bps.
@@ -38,6 +40,8 @@ Evidence **2026-11-06 Europe/Vilnius**:
 Do not rearm because the reason flipped. Peak drawdown does not reset at midnight. The next candidate will latch again while equity is still ≥$300 under peak. A recovered STON.fi 500 is an **explained** feed blip for Phase 0; do not restart the 7-day clock. Do not `reset-paper`.
 
 Hourly Grok `INCIDENT` while this halt is sticky is **one event**, not a new incident each hour. Evidence **5–6 Nov**: 18 of 24 hourly checks flagged, almost all `LIMIT_BREACH`, feeds ≥99.93%. That is the same latch. Six `NO_FLAG` hours were the pre-16:04 window. Do not rearm to make the monitor go green.
+
+Confirmed **2026-11-08 Europe/Vilnius** while still latched `LIMIT_BREACH`: three live 25 bps prints, all `candidate rejected: ['entry_halt', 'drawdown_limit']`. Reason did **not** flip. See `halted_print_is_not_fill_two`.
 
 ## reset_was_genesis_not_the_fill
 
@@ -102,3 +106,17 @@ A cycle dict that omits `halt_reason` is an **older image**, not a missing latch
 Railway auto-deploys **every** GitHub `main` commit. `push_files` of N files as N commits is N container restarts. Judge the **SUCCESS deploy of the tip SHA**, not the first `Starting Container` in the storm.
 
 Evidence **2026-11-06 13:50–13:57 Europe/Vilnius**: ten GitHub commits in six minutes (`20fdedc` … `079c099`) produced ten Railway deploys. The operator paste at 13:51 was the logutil-only boot: recover empty, halt True, no `halt_reason`. Live SUCCESS is `458e438d` / `079c099`. Halt and SMA survived every restart (`outcomes=[]`, samples 8/8). Batch GitHub pushes into **one** commit when you can. Do not `reset-paper` because the box restarted.
+
+## halted_print_is_not_fill_two
+
+A 25 bps candidate while `entry_halt` is True is **not** fill 2/8. Risk will reject `entry_halt` and, while peak drawdown still exceeds 3%, `drawdown_limit`. Cooldown still runs. `halt_reason` stays the first latch. Do not rearm because the book printed. Do not lower 25 bps. Do not `reset-paper`.
+
+Evidence **2026-11-08 Europe/Vilnius** (Railway CSV `10:21:43Z`–`14:45:21Z`, deploy `ee524b76`): 993 cycles, halt True, `halt_reason=LIMIT_BREACH` the whole window. Three candidates, zero intents:
+
+| Vilnius | Candidate | Dev | Mid vs SMA |
+| --- | --- | ---: | --- |
+| 13:20:25 | `cand_2026-11-08T112025Z_79` | −33 | `$1.0595` / `$1.0630` |
+| 14:53:09 | `cand_2026-11-08T125305Z_80` | +29 | `$1.0659` / `$1.0628` |
+| 15:49:22 | `cand_2026-11-08T134914Z_81` | −40 | `$1.0556` / `$1.0598` |
+
+Each log line: `candidate rejected: ['entry_halt', 'drawdown_limit']`. Next two cycles `skip=cooldown`. Mid in this window `$1.070` → `$1.052`. vs 5 Nov morning ~`$1.1655` that is still ~$0.11 / GRAM on 5 000 GRAM ≈ **−$550**, through the $300 drawdown floor. Fill count stays **1/8**.

@@ -83,3 +83,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `paper-policy` v9 changed: feed_down is not warming; Railway stderr is not a crash; cycle prints halt_reason
 - `lessons` v7 changed: live LIMIT_BREACH on cycle line; Railway boots every GitHub commit
 - `paper-policy` v10 changed: live LIMIT_BREACH on cycle line; Railway boots every GitHub commit
+
+## 2026-11-08
+
+### Documents
+
+- `lessons` v8 changed: halted 25 bps print is not fill 2/8
+- `paper-policy` v11 changed: halted 25 bps print is not fill 2/8
+- `learning-loop` v7 changed: halted 25 bps print is not fill 2/8

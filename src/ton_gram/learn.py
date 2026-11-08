@@ -78,6 +78,8 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
     rejected = report.get("rejected_candidates_by_reason") or {}
     all_in_rejects = int(rejected.get("all_in_cost") or 0) if isinstance(rejected, dict) else 0
     daily_loss_rejects = int(rejected.get("daily_loss_limit") or 0) if isinstance(rejected, dict) else 0
+    entry_halt_rejects = int(rejected.get("entry_halt") or 0) if isinstance(rejected, dict) else 0
+    drawdown_rejects = int(rejected.get("drawdown_limit") or 0) if isinstance(rejected, dict) else 0
     rejection_total = sum(int(v or 0) for v in rejected.values()) if isinstance(rejected, dict) else 0
     unrealized = int(report.get("day_unrealized_pnl_usdt_micro") or 0)
 
@@ -136,6 +138,8 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "quote_age_p90_ms": quote_p90,
             "all_in_rejects": all_in_rejects,
             "daily_loss_rejects": daily_loss_rejects,
+            "entry_halt_rejects": entry_halt_rejects,
+            "drawdown_rejects": drawdown_rejects,
             "unrealized_usdt_micro": unrealized,
             "rejection_total": rejection_total,
         },
@@ -183,6 +187,23 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": "all_in_cost_gate",
                 "severity": "high",
                 "text": "Risk rejected on all_in_cost. Inspect fee+impact+50bps slip vs max_all_in_cost_bps=80. Do not lower 25 bps.",
+            }
+        )
+    if (
+        sig.get("halt")
+        and emitted
+        and trades == 0
+        and (int(sig.get("entry_halt_rejects") or 0) or int(sig.get("drawdown_rejects") or 0))
+    ):
+        lessons.append(
+            {
+                "id": "halted_print_is_not_fill_two",
+                "severity": "high",
+                "text": (
+                    "A 25 bps print while entry is halted is a rejected candidate, not fill 2/8. "
+                    "Reject reasons entry_halt and/or drawdown_limit mean peak drawdown still blocks. "
+                    "Do not rearm. Do not lower 25 bps. Do not reset-paper."
+                ),
             }
         )
     if (

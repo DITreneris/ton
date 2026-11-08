@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_utc": "2026-11-06T12:07:09Z",
+  "updated_utc": "2026-11-08T14:48:23Z",
   "documents": [
     {
       "id": "document-system",
@@ -15,27 +15,27 @@
       "id": "learning-loop",
       "title": "Learning loop",
       "path": "learning-loop.md",
-      "version": 6,
-      "sha256": "1e4afcf4807bd741c65f27c0c4029cbb4b0c4c7359ea556ebad18fa6d79598a1",
-      "updated_utc": "2026-11-06T05:15:01Z",
+      "version": 7,
+      "sha256": "2751e8a2323ff2e705a251cdc83a165fadea35b4e0a7027b5b7462361499eccf",
+      "updated_utc": "2026-11-08T14:48:23Z",
       "status": "current"
     },
     {
       "id": "lessons",
       "title": "Operator lessons",
       "path": "lessons.md",
-      "version": 7,
-      "sha256": "f3c01dda68cf356abaebdfef81c38f2785a38cf9372ce7d567e763505a3ab795",
-      "updated_utc": "2026-11-06T12:07:09Z",
+      "version": 8,
+      "sha256": "9a7de163ed5ad8ca05b93d5779383585c14e3e01ef419821cca949b2d556f050",
+      "updated_utc": "2026-11-08T14:48:15Z",
       "status": "current"
     },
     {
       "id": "paper-policy",
       "title": "Paper policy",
       "path": "paper-policy.md",
-      "version": 10,
-      "sha256": "84b94cd4044a83305d4441df88887125e20d1926f30f32dc965a4585f8b9901b",
-      "updated_utc": "2026-11-06T12:07:09Z",
+      "version": 11,
+      "sha256": "c741ff3fa9855c17d6608bf8fa6cc7602c9c986f9af799711339404d525d37d4",
+      "updated_utc": "2026-11-08T14:48:15Z",
       "status": "current"
     },
     {
