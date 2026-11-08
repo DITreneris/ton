@@ -26,7 +26,7 @@ Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, 
 
 The Grok snapshot maps `HARD_HALT`/`OPERATOR` → `reason_code=HARD_HALT` and every other latched reason → `LIMIT_BREACH`. Read `open_execution_state.halt_reason`, not only the envelope.
 
-`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~‑170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`.
+`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~**170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`.
 
 `daily_pnl` resets on the first mark of the new UTC day. **Drawdown vs peak equity does not.** A green daily P&L after midnight does not make rearm safe if `drawdown_limit` would still fire. Do not rearm to manufacture fills.
 
