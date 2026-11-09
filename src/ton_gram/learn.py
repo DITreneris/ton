@@ -50,7 +50,7 @@ def rules_from_settings(settings: Settings | None = None) -> dict[str, Any]:
 def _skip_total(skips: dict[str, Any]) -> int:
     return sum(
         int(skips.get(k) or 0)
-        for k in ("warming", "flat", "cooldown", "spread", "feed_down", "emitted", "approved", "fired")
+        for k in ("warming", "flat", "cooldown", "spread", "feed_down", "halted", "emitted", "approved", "fired")
     )
 
 
@@ -67,6 +67,7 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
     flat = int(skips.get("flat") or 0)
     spread = int(skips.get("spread") or 0)
     emitted = int(skips.get("emitted") or skips.get("fired") or 0)
+    halted = int(skips.get("halted") or 0)
     approved = int(skips.get("approved") or 0)
     trades = int(report.get("trades_count") or 0)
     halt = bool(report.get("entry_halt"))
@@ -102,7 +103,7 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
         errors.append("spread skips dominate the day; gate may be treating bid-ask as a broken book")
     if total == 0:
         gaps.append("no cycle skip samples yet")
-    if trades == 0 and emitted == 0:
+    if trades == 0 and emitted == 0 and halted == 0:
         gaps.append("no candidate emitted; cannot audit fills")
     if emitted and not approved and trades == 0:
         gaps.append("candidates emitted but none approved")
@@ -128,6 +129,7 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "flat": flat,
             "spread": spread,
             "emitted": emitted,
+            "halted": halted,
             "approved": approved,
             "trades": trades,
             "realized_usdt_micro": realized,
@@ -165,7 +167,7 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
                 "text": "Most cycles skipped as spread. Do not lower the 25 bps entry gate. Check mid_spread_max_bps vs live bid-ask.",
             }
         )
-    if total and flat * 10 >= total * 8 and emitted == 0:
+    if total and flat * 10 >= total * 8 and emitted == 0 and int(sig.get("halted") or 0) == 0:
         lessons.append(
             {
                 "id": "quiet_book_is_not_a_bug",
@@ -191,9 +193,14 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
         )
     if (
         sig.get("halt")
-        and emitted
         and trades == 0
-        and (int(sig.get("entry_halt_rejects") or 0) or int(sig.get("drawdown_rejects") or 0))
+        and (
+            int(sig.get("halted") or 0)
+            or (
+                emitted
+                and (int(sig.get("entry_halt_rejects") or 0) or int(sig.get("drawdown_rejects") or 0))
+            )
+        )
     ):
         lessons.append(
             {

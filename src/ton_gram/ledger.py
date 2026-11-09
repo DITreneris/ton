@@ -705,6 +705,7 @@ class Ledger:
             "cooldown": 0,
             "spread": 0,
             "feed_down": 0,
+            "halted": 0,
             "emitted": 0,
             "approved": 0,
         }

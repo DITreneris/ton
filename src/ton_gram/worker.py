@@ -218,14 +218,26 @@ class PaperWorker:
         signal["mid_g2u_usdt_per_gram_micro"] = mid_g2u
         signal["mid_u2g_usdt_per_gram_micro"] = mid_u2g
         signal["mid_spread_bps"] = spread_bps
+        halted_reject = (
+            decision is not None
+            and decision.verdict is RiskVerdict.REJECT
+            and self.ledger.entry_halt
+            and any(r in decision.reasons for r in ("entry_halt", "drawdown_limit", "daily_loss_limit"))
+        )
         if intent is not None:
             skip_bucket = "approved"
+            skip = None
+        elif halted_reject:
+            skip_bucket = "halted"
+            skip = "halted"
         elif candidate is not None:
             skip_bucket = "emitted"
+            skip = None
         else:
             skip_bucket = signal["skip"]
-        skip = None if candidate is not None else signal["skip"]
+            skip = signal["skip"]
         self.ledger.bump_signal_skip(format_utc(self.clock.now())[:10], skip_bucket)
+        position = self.ledger.get_position()
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
@@ -233,6 +245,9 @@ class PaperWorker:
             "intent_id": intent.intent_id if intent else None,
             "halt": self.ledger.entry_halt,
             "halt_reason": self.ledger.halt_reason,
+            "reject_reasons": list(decision.reasons) if decision is not None else None,
+            "daily_pnl_usdt_micro": position.daily_pnl_usdt_micro,
+            "drawdown_usdt_micro": position.peak_equity_usdt_micro - position.equity_usdt_micro,
             "mid_usdt_per_gram_micro": mid,
             "skip": skip,
             "samples": signal["samples"],

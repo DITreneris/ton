@@ -81,6 +81,7 @@ def format_daily_card(report: dict[str, Any], *, funding_cap_usdt_micro: int) ->
         f"cooldown {int(skips.get('cooldown') or 0)} / "
         f"spread {int(skips.get('spread') or 0)} / "
         f"feed_down {int(skips.get('feed_down') or 0)} / "
+        f"halted {int(skips.get('halted') or 0)} / "
         f"emitted {emitted} / "
         f"approved {int(skips.get('approved') or 0)}"
     )
