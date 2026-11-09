@@ -91,3 +91,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `lessons` v8 changed: halted 25 bps print is not fill 2/8
 - `paper-policy` v11 changed: halted 25 bps print is not fill 2/8
 - `learning-loop` v7 changed: halted 25 bps print is not fill 2/8
+
+## 2026-11-09
+
+### Documents
+
+- `lessons` v9 changed: halted skip bucket; cycle prints reject_reasons daily_pnl drawdown
+- `paper-policy` v12 changed: halted skip bucket; cycle prints reject_reasons daily_pnl drawdown
