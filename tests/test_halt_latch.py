@@ -91,6 +91,41 @@ def test_feed_down_does_not_overwrite_limit_breach(settings, clock, ledger):
     worker.close()
 
 
+def test_halted_reject_cycle_prints_marks(settings, clock, ledger):
+    from tests.conftest import make_quote
+    from tests.test_telegram_cards import _scope_inputs
+    from ton_gram.models import Direction
+
+    ledger.latch_halt(HaltReason.LIMIT_BREACH)
+    settings.strategy_lookback = 3
+    settings.strategy_entry_deviation_bps = 1
+    settings.strategy_cooldown_cycles = 0
+    worker = PaperWorker(settings, clock, ledger)
+    for i in range(3):
+        worker.strategy.observe_mid(
+            make_quote(clock, Direction.GRAM_TO_USDT, quote_id=f"g{i}", ask_units=1_160_000),
+            make_quote(clock, Direction.USDT_TO_GRAM, quote_id=f"u{i}", ask_units=8_620_000_000),
+        )
+    shocked = make_quote(clock, Direction.GRAM_TO_USDT, quote_id="gX", ask_units=1_200_000)
+    shocked_u = make_quote(clock, Direction.USDT_TO_GRAM, quote_id="uX", ask_units=8_330_000_000)
+    with patch.object(worker.poller, "fetch_scope_inputs", return_value=_scope_inputs()):
+        with patch.object(
+            worker.poller,
+            "fetch_quotes",
+            return_value={Direction.GRAM_TO_USDT: shocked, Direction.USDT_TO_GRAM: shocked_u},
+        ):
+            summary = worker.cycle()
+    assert summary["candidate_id"] is not None
+    assert summary["intent_id"] is None
+    assert summary["skip"] == "halted"
+    assert summary["reject_reasons"] is not None
+    assert "entry_halt" in summary["reject_reasons"]
+    assert "daily_pnl_usdt_micro" in summary
+    assert "drawdown_usdt_micro" in summary
+    assert ledger.load_signal_skips(format_utc(clock.now())[:10])["halted"] == 1
+    worker.close()
+
+
 def test_unavailable_scope_does_not_emit_scope_mismatch(settings, clock, ledger):
     snap = build_snapshot(
         settings=settings,

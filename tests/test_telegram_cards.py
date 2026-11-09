@@ -43,7 +43,7 @@ def test_daily_card_uses_report_fields():
     assert "Net P&L: $0.00" in text
     assert "Unrealized (mark): -$0.30" in text
     assert "Drawdown: $40.00 (0.40% of $10000 cap)" in text
-    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / feed_down 0 / emitted 0 / approved 0" in text
+    assert "Signal: flat 12 / warming 1 / cooldown 0 / spread 0 / feed_down 0 / halted 0 / emitted 0 / approved 0" in text
     assert "Feed: stonfi_quotes UP 100.0%" in text
 
 
@@ -182,6 +182,9 @@ def test_healthy_bid_ask_does_not_skip_spread(settings, clock, ledger):
         with patch.object(worker.poller, "fetch_quotes", return_value={Direction.GRAM_TO_USDT: g2u, Direction.USDT_TO_GRAM: u2g}):
             summary = worker.cycle()
     assert summary["skip"] != "spread"
+    assert summary["reject_reasons"] is None
+    assert "drawdown_usdt_micro" in summary
+    assert "daily_pnl_usdt_micro" in summary
     assert summary["mid_spread_bps"] is not None
     assert summary["mid_spread_bps"] < settings.mid_spread_max_bps
     assert len(worker.strategy.mids) == 1

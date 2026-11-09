@@ -22,7 +22,7 @@ Risk only evaluates this when a **candidate** exists. Flat cycles can sit under 
 
 A sticky halt after `candidate rejected: ['daily_loss_limit']` is inventory mark when unrealized PnL is the loss driver. Do not treat it as a blown $1 fade. Do not rearm to manufacture the next fill. Do not lower 25 bps. Do not raise the all-in cap.
 
-Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~**200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
+Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~ **200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
 
 Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so ~170 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
 
@@ -120,3 +120,5 @@ Evidence **2026-11-08 Europe/Vilnius** (Railway CSV `10:21:43Z`–`14:45:21Z`, d
 | 15:49:22 | `cand_2026-11-08T134914Z_81` | −40 | `$1.0556` / `$1.0598` |
 
 Each log line: `candidate rejected: ['entry_halt', 'drawdown_limit']`. Next two cycles `skip=cooldown`. Mid in this window `$1.070` → `$1.052`. vs 5 Nov morning ~`$1.1655` that is still ~$0.11 / GRAM on 5 000 GRAM ≈ **−$550**, through the $300 drawdown floor. Fill count stays **1/8**.
+
+**2026-11-09 05:38–10:00 Europe/Vilnius**: eight more prints (`cand_121`–`128`), still 0 intents. Two of them also carried `daily_loss_limit` after the UTC day rolled (05:49 and 05:56). That is today's mark vs today's SOD, stacked on the same sticky `LIMIT_BREACH`. Mid ~`$1.00`. vs 5 Nov ~`$1.1655` ≈ **−$825** on 5 000 GRAM. Cycle lines should now print `skip=halted` plus `reject_reasons` / `daily_pnl` / `drawdown` so the extra daily-loss reason is visible without a snapshot.

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_utc": "2026-11-08T14:48:23Z",
+  "updated_utc": "2026-11-09T08:03:50Z",
   "documents": [
     {
       "id": "document-system",
@@ -24,18 +24,18 @@
       "id": "lessons",
       "title": "Operator lessons",
       "path": "lessons.md",
-      "version": 8,
-      "sha256": "9a7de163ed5ad8ca05b93d5779383585c14e3e01ef419821cca949b2d556f050",
-      "updated_utc": "2026-11-08T14:48:15Z",
+      "version": 9,
+      "sha256": "aca9bb4c0ce63f0d847e0506699dc6707f45dbb2637d35aaab2f85e6b4687d39",
+      "updated_utc": "2026-11-09T08:03:50Z",
       "status": "current"
     },
     {
       "id": "paper-policy",
       "title": "Paper policy",
       "path": "paper-policy.md",
-      "version": 11,
-      "sha256": "c741ff3fa9855c17d6608bf8fa6cc7602c9c986f9af799711339404d525d37d4",
-      "updated_utc": "2026-11-08T14:48:15Z",
+      "version": 12,
+      "sha256": "747bab6f6f7ff45707eb4eea3fffb585d58a5db412dff89aba7b26753de89437",
+      "updated_utc": "2026-11-09T08:03:50Z",
       "status": "current"
     },
     {
