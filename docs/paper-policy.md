@@ -28,7 +28,7 @@ The Grok snapshot maps `HARD_HALT`/`OPERATOR` → `reason_code=HARD_HALT` and ev
 
 `daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~ **170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`.
 
-`daily_pnl` resets on the first mark of the new UTC day. **Drawdown vs peak equity does not.** A green daily P&L after midnight does not make rearm safe if `drawdown_limit` would still fire. Do not rearm to manufacture fills.
+`daily_pnl` resets on the first mark of the new UTC day. **Drawdown vs peak equity does not.** A green daily P&L after midnight does not make rearm safe if `drawdown_limit` would still fire. Trust `drawdown_usdt_micro` on the cycle line, not `daily_pnl_usdt_micro`. See `read_drawdown_not_daily_pnl`. Do not rearm to manufacture fills.
 
 A 25 bps print while halted is a rejected candidate (`entry_halt`, usually also `drawdown_limit`), not fill 2/8. Cycle skip is `halted`, not `emitted`. The cycle line includes `reject_reasons`, `daily_pnl_usdt_micro`, and `drawdown_usdt_micro`. See `halted_print_is_not_fill_two`.
 

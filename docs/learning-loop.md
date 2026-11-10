@@ -16,6 +16,8 @@ If halt is `LIMIT_BREACH`, `rejected_candidates_by_reason.daily_loss_limit` is s
 
 If halt is on, candidates emitted, trades are 0, and rejects are `entry_halt` / `drawdown_limit`, the lesson is `halted_print_is_not_fill_two`. That 25 bps print is not fill 2/8. Do not rearm.
 
+If halt is on and daily P&L is green while drawdown is still through the floor, the lesson is `read_drawdown_not_daily_pnl`. Trust `drawdown_usdt_micro` on the cycle, not today's mark.
+
 `daily_pnl` resets on the first UTC mark. Drawdown vs peak does not. A later STON.fi 500 must not rewrite `halt_reason` (`halt_reason_first_latch_wins`). Do not rearm because the snapshot flipped `HARD_HALT` ↔ `LIMIT_BREACH`.
 
 When `trades_count` > 0, the lesson is `audit_fills_after_costs`. Score net after fee, impact, 50 bps slip, delay, and gas.

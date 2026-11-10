@@ -98,3 +98,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `lessons` v9 changed: halted skip bucket; cycle prints reject_reasons daily_pnl drawdown
 - `paper-policy` v12 changed: halted skip bucket; cycle prints reject_reasons daily_pnl drawdown
+
+## 2026-11-10
+
+### Documents
+
+- `learning-loop` v8 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov
+- `lessons` v10 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov
+- `paper-policy` v13 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov

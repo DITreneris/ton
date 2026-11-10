@@ -51,6 +51,8 @@ Confirmed **2026-11-08 Europe/Vilnius** while still latched `LIMIT_BREACH`: thre
 
 The first successful mark after 00:00 UTC sets start-of-day equity and `daily_pnl=0`. Twenty minutes later, 5 000 GRAM × a $0.0065 tick is **+$32.53**. That is inventory mark, not a bug and not a reason to rearm.
 
+Read `drawdown_usdt_micro` on the cycle, not `daily_pnl_usdt_micro`. See `read_drawdown_not_daily_pnl`.
+
 ## audit_fills_after_costs
 
 A reserved paper intent is not a win. Score net P&L after pool fee, price impact, 50 bps conservative slip, measured delay, and measured gas.
@@ -121,4 +123,12 @@ Evidence **2026-11-08 Europe/Vilnius** (Railway CSV `10:21:43Z`–`14:45:21Z`, d
 
 Each log line: `candidate rejected: ['entry_halt', 'drawdown_limit']`. Next two cycles `skip=cooldown`. Mid in this window `$1.070` → `$1.052`. vs 5 Nov morning ~`$1.1655` that is still ~$0.11 / GRAM on 5 000 GRAM ≈ **−$550**, through the $300 drawdown floor. Fill count stays **1/8**.
 
-**2026-11-09 05:38–10:00 Europe/Vilnius**: eight more prints (`cand_121`–`128`), still 0 intents. Two of them also carried `daily_loss_limit` after the UTC day rolled (05:49 and 05:56). That is today's mark vs today's SOD, stacked on the same sticky `LIMIT_BREACH`. Mid ~`$1.00`. vs 5 Nov ~`$1.1655` ≈ **−$825** on 5 000 GRAM. Cycle lines should now print `skip=halted` plus `reject_reasons` / `daily_pnl` / `drawdown` so the extra daily-loss reason is visible without a snapshot.
+**2026-11-09 05:38–10:00 Europe/Vilnius**: eight more prints (`cand_121`–`128`), still 0 intents. Two of them also carried `daily_loss_limit` after the UTC day rolled (05:49 and 05:56). That is today's mark vs today's SOD, stacked on the same sticky `LIMIT_BREACH`. Mid ~`$1.00`. vs 5 Nov ~`$1.1655` ≈ **−$825** on 5 000 GRAM.
+
+**2026-11-10 10:34–14:54 Europe/Vilnius** (deploy `1155e521`): the cycle line is live. 978 cycles, 18 candidates, all `skip=halted`, all `reject_reasons=['entry_halt', 'drawdown_limit']`, 0 intents. Cooldown 36. Biggest print **−66** at 11:40 (`$1.084` vs SMA `$1.091`). Fill count stays **1/8**. See `read_drawdown_not_daily_pnl`.
+
+## read_drawdown_not_daily_pnl
+
+Rearm is about **peak drawdown**, not today's mark. The cycle dict now prints both: `daily_pnl_usdt_micro` (vs UTC start-of-day) and `drawdown_usdt_micro` (vs peak). A green daily P&L with drawdown still ≥ `$300` is the same sticky `LIMIT_BREACH`. Do not rearm. Do not `reset-paper`. Do not lower 25 bps.
+
+Evidence **2026-11-10 10:34–14:54 Europe/Vilnius**: 18 halted rejects. Daily P&L **+$167 to +$311**. Drawdown **$337 to $481**. Floor is `$300`. No `daily_loss_limit` in this window because today's SOD mark is up. Mid `$1.074`–`$1.103`. vs 5 Nov morning ~`$1.1655` the hole is still ~$0.07–$0.09 / GRAM on 5 000 GRAM. Trust `drawdown_usdt_micro` on the cycle. The green daily number is `utc_sod_mark_is_not_zero_all_day`.
