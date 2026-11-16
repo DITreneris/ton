@@ -106,3 +106,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `learning-loop` v8 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov
 - `lessons` v10 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov
 - `paper-policy` v13 changed: read drawdown on the cycle, not daily P&L; skip=halted live on 10 Nov
+
+## 2026-11-16
+
+### Changed
+
+- `learn` names `halt_does_not_freeze_peak`, `read_drawdown_not_daily_pnl`, and live `feed_down_is_not_warming`. It still will not lower 25 bps or raise the all-in cap.
+
+### Documents
+
+- `learning-loop` v9 changed: halt does not freeze peak; 16 Nov feed_down live; do not rearm under 1.1k drawdown
+- `lessons` v11 changed: halt does not freeze peak; 16 Nov feed_down live; do not rearm under 1.1k drawdown
+- `paper-policy` v14 changed: halt does not freeze peak; 16 Nov feed_down live; do not rearm under 1.1k drawdown
