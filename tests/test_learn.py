@@ -5,6 +5,7 @@ from ton_gram.clock import FrozenClock
 from ton_gram.config import Settings
 from ton_gram.clock import format_utc
 from ton_gram.learn import (
+    DRAWDOWN_FLOOR_USDT_MICRO,
     PINNED_RULES,
     evaluate_paper_day,
     extract_lessons,
@@ -274,9 +275,96 @@ def test_halted_print_is_not_fill_two():
     lessons = extract_lessons(evaluation)
     assert any(item["id"] == "halted_print_is_not_fill_two" for item in lessons)
     assert all(item["id"] != "quiet_book_is_not_a_bug" for item in lessons)
+    text = next(item["text"] for item in lessons if item["id"] == "halted_print_is_not_fill_two")
+    assert "entry_halt alone" in text
     update = recommend_rules(evaluation)
     assert update["apply"] is False
     assert update["recommended"]["strategy_entry_deviation_bps"] == 25
+
+
+def test_read_drawdown_not_daily_pnl_when_daily_is_green():
+    evaluation = evaluate_paper_day(
+        _quiet_report(
+            entry_halt=True,
+            halt_reason="LIMIT_BREACH",
+            drawdown_usdt_micro=400_000_000,
+            day_unrealized_pnl_usdt_micro=200_000_000,
+            rejected_candidates_by_reason={"entry_halt": 18, "drawdown_limit": 18},
+            signal_skips={
+                "warming": 0,
+                "flat": 900,
+                "cooldown": 36,
+                "spread": 0,
+                "halted": 18,
+                "emitted": 0,
+                "approved": 0,
+            },
+        )
+    )
+    assert evaluation["signals"]["drawdown_usdt_micro"] == 400_000_000
+    assert evaluation["signals"]["daily_pnl_usdt_micro"] == 200_000_000
+    ids = [item["id"] for item in extract_lessons(evaluation)]
+    assert "read_drawdown_not_daily_pnl" in ids
+    assert "halt_does_not_freeze_peak" in ids
+    update = recommend_rules(evaluation)
+    assert update["apply"] is False
+    assert update["recommended"]["strategy_entry_deviation_bps"] == 25
+
+
+def test_halt_does_not_freeze_peak_when_hole_is_vs_peak():
+    evaluation = evaluate_paper_day(
+        _quiet_report(
+            entry_halt=True,
+            halt_reason="LIMIT_BREACH",
+            drawdown_usdt_micro=1_162_000_000,
+            day_unrealized_pnl_usdt_micro=-108_000_000,
+            rejected_candidates_by_reason={"entry_halt": 5, "drawdown_limit": 5},
+            signal_skips={
+                "warming": 0,
+                "flat": 956,
+                "cooldown": 10,
+                "spread": 0,
+                "halted": 5,
+                "feed_down": 7,
+                "emitted": 0,
+                "approved": 0,
+            },
+        )
+    )
+    assert evaluation["signals"]["drawdown_usdt_micro"] >= DRAWDOWN_FLOOR_USDT_MICRO
+    assert evaluation["signals"]["daily_pnl_usdt_micro"] < 0
+    assert evaluation["signals"]["feed_down"] == 7
+    ids = [item["id"] for item in extract_lessons(evaluation)]
+    assert "halt_does_not_freeze_peak" in ids
+    assert "halted_print_is_not_fill_two" in ids
+    assert "feed_down_is_not_warming" in ids
+    assert "read_drawdown_not_daily_pnl" not in ids
+    update = recommend_rules(evaluation)
+    assert update["apply"] is False
+    assert update["recommended"]["strategy_entry_deviation_bps"] == 25
+    assert update["recommended"]["max_all_in_cost_bps"] == 80
+
+
+def test_feed_down_is_not_warming_while_limit_breach_holds():
+    evaluation = evaluate_paper_day(
+        _quiet_report(
+            entry_halt=True,
+            halt_reason="LIMIT_BREACH",
+            scope_status="UNAVAILABLE",
+            signal_skips={
+                "warming": 0,
+                "flat": 10,
+                "cooldown": 0,
+                "spread": 0,
+                "feed_down": 2,
+                "emitted": 0,
+                "approved": 0,
+            },
+        )
+    )
+    lessons = extract_lessons(evaluation)
+    assert any(item["id"] == "feed_down_is_not_warming" for item in lessons)
+    assert all(item["id"] != "error" or "SCOPE_MISMATCH" not in item["text"] for item in lessons)
 
 
 def test_inventory_mark_dominates_helper():
