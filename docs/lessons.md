@@ -14,15 +14,17 @@ Same day **15:25–15:34 Europe/Vilnius**: still `scope=PASS`, spread **20 bps**
 
 **2026-11-08 12:21–16:45 Europe/Vilnius**: 984 `flat` / 6 `cooldown` / 3 emitted. Between prints the book is still quiet. The three prints are `halted_print_is_not_fill_two`, not a retune.
 
+**2026-11-16 04:08–08:28 Europe/Vilnius**: 956 `flat` / 5 halted / 10 cooldown / 7 `feed_down`. Max |dev| **34**. Mid `$1.05`–`$1.07`. The quiet stretch is still the baseline. The five prints are not a retune. Do not lower 25 bps.
+
 ## daily_loss_marks_inventory
 
 `daily_loss_limit` marks the **whole paper wallet** (genesis 5 000 GRAM + 5 000 USD₮), not the last clip. Floor is 1% of the $10k funding cap = **$100** = **~$0.02 / GRAM**. At `$1.16` that is about **170 bps**, not 20. A 20 000-micro mid tick is $0.02; relative to price it is ~170 bps.
 
-Risk only evaluates this when a **candidate** exists. Flat cycles can sit under −$100 with `halt=false`. The next 25 bps print is what latches `LIMIT_BREACH`.
+Risk only evaluates this when a **candidate** exists. Flat cycles can sit under −$100 with `halt=false`. The next 25 bps print is what latches `LIMIT_BREACH`. The same is true while already halted: **2026-11-16 08:07–08:28 Europe/Vilnius** sat 83 `skip=flat` cycles through **−$100** daily P&L with no `daily_loss_limit` on the log, because no candidate printed. Drawdown was already **~$1.16k**. Do not rearm into that window.
 
 A sticky halt after `candidate rejected: ['daily_loss_limit']` is inventory mark when unrealized PnL is the loss driver. Do not treat it as a blown $1 fade. Do not rearm to manufacture the next fill. Do not lower 25 bps. Do not raise the all-in cap.
 
-Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~ **200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
+Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~**200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
 
 Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so ~170 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
 
@@ -43,6 +45,8 @@ Hourly Grok `INCIDENT` while this halt is sticky is **one event**, not a new inc
 
 Confirmed **2026-11-08 Europe/Vilnius** while still latched `LIMIT_BREACH`: three live 25 bps prints, all `candidate rejected: ['entry_halt', 'drawdown_limit']`. Reason did **not** flip. See `halted_print_is_not_fill_two`.
 
+Confirmed **2026-11-16 04:08–08:28 Europe/Vilnius** (deploy `6da0e365`, same image as 12 Nov): 978 cycles, halt True, `LIMIT_BREACH` the whole window. Seven STON.fi `simulate` 500s. Zero reason flips. Each 500 is `skip=feed_down` / `scope=UNAVAILABLE`, next cycle `PASS` / `flat`. Do not restart the 7-day clock. See `feed_down_is_not_warming`.
+
 ## reset_was_genesis_not_the_fill
 
 `POST /v1/control/reset` at **2026-11-05 07:28 Europe/Vilnius** (`05:28:40Z`, HTTP 200) wiped the early halt and restored genesis balances. Recover on that boot had **no** unresolved intents (`outcomes=[]`). The 15:34 fill `int_20261105T133435Z_1971` is after that reset and still counts as fill 1/8. Do not reset again to chase a green card.
@@ -51,7 +55,7 @@ Confirmed **2026-11-08 Europe/Vilnius** while still latched `LIMIT_BREACH`: thre
 
 The first successful mark after 00:00 UTC sets start-of-day equity and `daily_pnl=0`. Twenty minutes later, 5 000 GRAM × a $0.0065 tick is **+$32.53**. That is inventory mark, not a bug and not a reason to rearm.
 
-Read `drawdown_usdt_micro` on the cycle, not `daily_pnl_usdt_micro`. See `read_drawdown_not_daily_pnl`.
+Read `drawdown_usdt_micro` on the cycle, not `daily_pnl_usdt_micro`. A red daily P&L is the same SOD mark, just the other way. See `read_drawdown_not_daily_pnl`. Peak still ratchets while halted. See `halt_does_not_freeze_peak`.
 
 ## audit_fills_after_costs
 
@@ -91,11 +95,15 @@ A STON.fi `POST /v1/swap/simulate` 500 is `skip=feed_down` and `scope=UNAVAILABL
 
 Evidence **2026-11-06 12:28 and 12:37 Europe/Vilnius** (Railway CSV `09:30:33Z`–`11:45:35Z`): 509 cycles, halt True the whole window, 507 `skip=flat` / `scope=PASS`. Two simulate 500s logged `skip=warming` / `scope=FAIL` because `signal_view(mid=0)` reused the warming bucket and empty `verify_scope()` failed closed. Both recovered on the next cycle (~8–20s). Max |deviation| was **21 bps** (13:26 Vilnius). Zero candidates. That is a quiet halted book, not a broken SMA.
 
+Live fix **2026-11-16 05:17–06:19 Europe/Vilnius**: seven `POST /v1/swap/simulate` 500s. Each cycle is `skip=feed_down`, `scope=UNAVAILABLE`, `mid=0`, SMA samples still 8/8. Next cycle (~16 s) `PASS` / `flat`. `halt_reason` stays `LIMIT_BREACH`. Railway labels the WARNING `severity=info` because WARNING goes to stdout — filter on `provider failure`, not the error column.
+
 ## railway_info_on_stderr_is_not_a_crash
 
 Python logging defaulted to stderr. Railway labels every stderr line `severity=error`. The 6 Nov dump tagged 519 INFO cycle lines as errors. Worker INFO/WARNING now go to stdout; ERROR stays on stderr. Do not page on a Railway error count that matches the cycle count.
 
 Confirmed **2026-11-06 13:55+ Europe/Vilnius** (image `079c099`): cycle lines are Railway `info`, not `error`.
+
+**2026-11-16**: seven real STON.fi 500s are also Railway `info` (WARNING on stdout). Filter on `provider failure` in the message. A zero Railway error count does not mean the feed was clean.
 
 ## cycle_must_print_halt_reason
 
@@ -127,8 +135,24 @@ Each log line: `candidate rejected: ['entry_halt', 'drawdown_limit']`. Next two 
 
 **2026-11-10 10:34–14:54 Europe/Vilnius** (deploy `1155e521`): the cycle line is live. 978 cycles, 18 candidates, all `skip=halted`, all `reject_reasons=['entry_halt', 'drawdown_limit']`, 0 intents. Cooldown 36. Biggest print **−66** at 11:40 (`$1.084` vs SMA `$1.091`). Fill count stays **1/8**. See `read_drawdown_not_daily_pnl`.
 
+**2026-11-12 06:42–11:01 Europe/Vilnius** (deploy `6da0e365`): 26 halted prints, 0 intents. First four still `['entry_halt', 'drawdown_limit']`. From 09:14 (`cand_549`, drawdown **$286**) the next 22 are **`['entry_halt']` only**. Floor recovered. Latch remains. Do not rearm because `drawdown_limit` dropped off. See `halt_does_not_freeze_peak`.
+
+**2026-11-16 04:08–08:28 Europe/Vilnius** (same deploy `6da0e365`): 5 halted prints (`cand_979`–`983`), all `['entry_halt', 'drawdown_limit']` again, 0 intents. Candidate ids jumped `570` → `979` across the 4-day gap. Fill stays **1/8**. Drawdown **$1,091–$1,166**. Do not rearm.
+
 ## read_drawdown_not_daily_pnl
 
 Rearm is about **peak drawdown**, not today's mark. The cycle dict now prints both: `daily_pnl_usdt_micro` (vs UTC start-of-day) and `drawdown_usdt_micro` (vs peak). A green daily P&L with drawdown still ≥ `$300` is the same sticky `LIMIT_BREACH`. Do not rearm. Do not `reset-paper`. Do not lower 25 bps.
 
 Evidence **2026-11-10 10:34–14:54 Europe/Vilnius**: 18 halted rejects. Daily P&L **+$167 to +$311**. Drawdown **$337 to $481**. Floor is `$300`. No `daily_loss_limit` in this window because today's SOD mark is up. Mid `$1.074`–`$1.103`. vs 5 Nov morning ~`$1.1655` the hole is still ~$0.07–$0.09 / GRAM on 5 000 GRAM. Trust `drawdown_usdt_micro` on the cycle. The green daily number is `utc_sod_mark_is_not_zero_all_day`.
+
+**2026-11-16 04:08–08:28 Europe/Vilnius**: the daily number is **red** (**−$37 to −$112**). Last 22 minutes (08:07–08:28) sit through the **−$100** daily floor with `skip=flat` — risk never prints `daily_loss_limit` until a candidate. Drawdown **$1,091–$1,166**. Trust the peak hole, not today's −$50s on the five prints. See `daily_loss_marks_inventory` and `halt_does_not_freeze_peak`.
+
+## halt_does_not_freeze_peak
+
+`entry_halt` blocks new clips. It does **not** freeze marks. Peak equity still ratchets on a new high. The next dump is vs **that** high, not vs the 5 Nov morning mid and not vs the last time drawdown was under `$300`.
+
+Do not rearm because `reject_reasons` is `['entry_halt']` only. That means the `$300` floor recovered **this cycle**, not that the latch is safe. Headroom can be a few cents per GRAM. A later bounce while still halted raises the high-water mark; the dump from the new peak puts `drawdown_limit` back on the next print.
+
+Evidence **2026-11-12 09:14 Europe/Vilnius**: first under-floor print `cand_549`, mid `$1.1975`, drawdown **$286**, daily P&L **+$115**. Last cycle that morning: drawdown **$172**, mid `$1.221`, daily **+$229**. Implied peak ~`$1.255` / ~`$11,275`. Operator did not rearm.
+
+Evidence **2026-11-16 04:08–08:28 Europe/Vilnius**: mid `$1.051`–`$1.066`, drawdown **$1,091–$1,166**, daily P&L **−$37 to −$112**. Implied peak ~`$1.284` / ~`$11,420`. The bounce after 12 Nov marked ~`$145` of new peak, then dumped. Same sticky `LIMIT_BREACH`. Fill stays **1/8**. Do not rearm. Do not `reset-paper`. Do not lower 25 bps.
