@@ -30,6 +30,9 @@ PINNED_RULES = {
     "intent_ttl_s": 45,
 }
 
+# Default 3% of the $10k funding cap. Matches Settings.drawdown_bps * funding_cap.
+DRAWDOWN_FLOOR_USDT_MICRO = 300_000_000
+
 
 def rules_from_settings(settings: Settings | None = None) -> dict[str, Any]:
     """Live Settings for scoring. Signing stays false. 25 bps is not auto-lowered."""
@@ -68,6 +71,7 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
     spread = int(skips.get("spread") or 0)
     emitted = int(skips.get("emitted") or skips.get("fired") or 0)
     halted = int(skips.get("halted") or 0)
+    feed_down = int(skips.get("feed_down") or 0)
     approved = int(skips.get("approved") or 0)
     trades = int(report.get("trades_count") or 0)
     halt = bool(report.get("entry_halt"))
@@ -83,6 +87,11 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
     drawdown_rejects = int(rejected.get("drawdown_limit") or 0) if isinstance(rejected, dict) else 0
     rejection_total = sum(int(v or 0) for v in rejected.values()) if isinstance(rejected, dict) else 0
     unrealized = int(report.get("day_unrealized_pnl_usdt_micro") or 0)
+    position = report.get("position") or {}
+    drawdown = int(report.get("drawdown_usdt_micro") or position.get("drawdown_usdt_micro") or 0)
+    daily_pnl = int(position.get("daily_pnl_usdt_micro") or 0)
+    if daily_pnl == 0 and (realized or unrealized):
+        daily_pnl = realized + unrealized
 
     feed_floor = 100.0
     for stats in feeds.values() if isinstance(feeds, dict) else []:
@@ -130,6 +139,7 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "spread": spread,
             "emitted": emitted,
             "halted": halted,
+            "feed_down": feed_down,
             "approved": approved,
             "trades": trades,
             "realized_usdt_micro": realized,
@@ -143,6 +153,8 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
             "entry_halt_rejects": entry_halt_rejects,
             "drawdown_rejects": drawdown_rejects,
             "unrealized_usdt_micro": unrealized,
+            "drawdown_usdt_micro": drawdown,
+            "daily_pnl_usdt_micro": daily_pnl,
             "rejection_total": rejection_total,
         },
         "rules_used": rules,
@@ -208,8 +220,48 @@ def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
                 "severity": "high",
                 "text": (
                     "A 25 bps print while entry is halted is a rejected candidate, not fill 2/8. "
-                    "Reject reasons entry_halt and/or drawdown_limit mean peak drawdown still blocks. "
+                    "entry_halt is the sticky latch. drawdown_limit means peak is still through $300. "
+                    "entry_halt alone means the floor recovered this cycle, not that rearm is safe. "
                     "Do not rearm. Do not lower 25 bps. Do not reset-paper."
+                ),
+            }
+        )
+    if (
+        sig.get("halt")
+        and int(sig.get("daily_pnl_usdt_micro") or 0) > 0
+        and int(sig.get("drawdown_usdt_micro") or 0) >= DRAWDOWN_FLOOR_USDT_MICRO
+    ):
+        lessons.append(
+            {
+                "id": "read_drawdown_not_daily_pnl",
+                "severity": "high",
+                "text": (
+                    "Daily P&L is green vs UTC start-of-day while peak drawdown is still through $300. "
+                    "Trust drawdown_usdt_micro on the cycle, not today's mark. Do not rearm."
+                ),
+            }
+        )
+    if sig.get("halt") and int(sig.get("drawdown_usdt_micro") or 0) >= DRAWDOWN_FLOOR_USDT_MICRO:
+        lessons.append(
+            {
+                "id": "halt_does_not_freeze_peak",
+                "severity": "high",
+                "text": (
+                    "entry_halt blocks clips, not marks. Peak equity still ratchets on a new high. "
+                    "The hole is vs that peak, not vs UTC midnight and not vs the last under-floor tick. "
+                    "Do not rearm because drawdown_limit dropped off a reject list."
+                ),
+            }
+        )
+    if int(sig.get("feed_down") or 0) and sig.get("halt_reason") == "LIMIT_BREACH":
+        lessons.append(
+            {
+                "id": "feed_down_is_not_warming",
+                "severity": "info",
+                "text": (
+                    "STON.fi simulate 500s are skip=feed_down / scope=UNAVAILABLE. "
+                    "halt_reason stayed LIMIT_BREACH. That is an explained blip. "
+                    "Do not restart the 7-day clock. Filter Railway on provider failure, not severity=error."
                 ),
             }
         )
