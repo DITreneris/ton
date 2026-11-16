@@ -14,9 +14,13 @@ If candidates emit and `rejected_candidates_by_reason.all_in_cost` dominates, th
 
 If halt is `LIMIT_BREACH`, `rejected_candidates_by_reason.daily_loss_limit` is set, and unrealized PnL is the loss driver, the lesson is `daily_loss_marks_inventory`. That is marked genesis inventory (5 000 GRAM) vs UTC start-of-day: $100 = ~$0.02/GRAM (~170 bps at $1.16), not a blown clip. Risk only evaluates the floor when a candidate exists. Score the day. Do not rearm to manufacture fills. Do not lower 25 bps.
 
-If halt is on, candidates emitted, trades are 0, and rejects are `entry_halt` / `drawdown_limit`, the lesson is `halted_print_is_not_fill_two`. That 25 bps print is not fill 2/8. Do not rearm.
+If halt is on, candidates emitted, trades are 0, and rejects are `entry_halt` / `drawdown_limit`, the lesson is `halted_print_is_not_fill_two`. That 25 bps print is not fill 2/8. `['entry_halt']` alone is the sticky latch; `drawdown_limit` means peak is still through `$300`. Do not rearm.
 
 If halt is on and daily P&L is green while drawdown is still through the floor, the lesson is `read_drawdown_not_daily_pnl`. Trust `drawdown_usdt_micro` on the cycle, not today's mark.
+
+If halt is on and drawdown is still through the `$300` floor, the lesson is `halt_does_not_freeze_peak`. Peak equity ratchets on a new high while halted. The hole is vs that peak, not vs UTC midnight. Do not rearm because `drawdown_limit` dropped off a reject list.
+
+If `feed_down` skips are present and `halt_reason` is still `LIMIT_BREACH`, the lesson is `feed_down_is_not_warming`. A recovered STON.fi 500 is an explained blip. Do not restart the 7-day clock.
 
 `daily_pnl` resets on the first UTC mark. Drawdown vs peak does not. A later STON.fi 500 must not rewrite `halt_reason` (`halt_reason_first_latch_wins`). Do not rearm because the snapshot flipped `HARD_HALT` ↔ `LIMIT_BREACH`.
 
