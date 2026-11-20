@@ -26,7 +26,30 @@ A sticky halt after `candidate rejected: ['daily_loss_limit']` is inventory mark
 
 Evidence **2026-11-05 16:04 Europe/Vilnius**: second live candidate at deviation **−28** (`mid $1.141932` vs SMA `$1.145094`). Risk rejected `daily_loss_limit` and latched halt. The earlier clip was ~1 GRAM / ~$1.14. Morning mid was ~`$1.1655`; afternoon ~`$1.1419` (~**200 bps** cheaper). Marked inventory ≈ **−$118**. The $1 fade did not blow the cap. From 15:25 the mark was already through the floor; halt stayed false until this print.
 
-Rearm only after an explicit policy change (mark daily loss on realized paper trades, or cut genesis GRAM so ~170 bps of book is not −$100) or after you accept that a normal GRAM day will trip this again.
+That policy change shipped as `risk_floors_are_realized`. This lesson stays as telemetry: Grok and the cycle line still print the GRAM hole. It is **not** a halt input anymore. Rearm is the sequence in `risk_floors_are_realized`, not because daily P&L is green.
+
+## risk_floors_are_realized
+
+Halt floors are **realized clip P&L**. Marked 5 000 GRAM is telemetry.
+
+- `daily_loss_limit` when `day_realized_pnl_usdt_micro <= -$100` (1% of $10k). UTC day still resets. Marked `daily_pnl_usdt_micro` is not a halt input.
+- `drawdown_limit` when `peak_clip_equity - (funding_cap + realized_pnl) >= $300`. `peak_clip_equity` ratchets **only on fills** (and genesis). Marked peak vs 5 000 GRAM is not a halt input.
+- Sticky latch set is unchanged: `daily_loss_limit`, `drawdown_limit`, `scope_verification_failed`. First latch still wins.
+- 25 bps and `max_all_in_cost_bps=80` stay put. Gas is in the fill **score**, not the 80 bps reject (fee+impact+50).
+
+Evidence **2026-11-05 16:04 Europe/Vilnius**: marked ≈ **−$118** on 5 000 GRAM latched `daily_loss_limit`. The $1 fade did not blow $100. Fill count stayed **1/8**.
+
+Evidence **16–17 Nov**: marked hole **$1.1k–$1.2k** while fill count stayed **1/8**. That hole is still on the cycle as `drawdown_usdt_micro`. Read `day_realized_usdt_micro` and `realized_drawdown_usdt_micro` for rearm.
+
+**Operator sequence after this image is live**
+
+1. Confirm Railway **SUCCESS** of the **tip SHA** (not the first container in a storm).
+2. Snapshot: `halt_reason=LIMIT_BREACH` still (old latch). Marked drawdown still ~$1.2k. **Realized** drawdown ~0.
+3. `POST /v1/control/rearm` on the Railway host. Do **not** `reset-paper` (that wipes `int_20261105T133435Z_1971`).
+4. Next 25 bps print can approve if quote `fee+impact+50 <= 80`. Fill 2/8 is a stressed paper clip, not a win. Run `POST /v1/learn`.
+5. If the first live day after rearm burns **$100 realized** or **$300 realized** from clip peak, halt is doing its job on **trades**. Do not rearm to manufacture the rest of the 8.
+
+A 25 bps 2-minute fade vs ~80–135 bps stressed cost is expected to fail `net > 0`. Eight fills that lose after costs = Phase 1 no-go. Next experiment is a stricter signal or longer SMA, **same floors**, still no live keys. Do not lower 25. Do not raise 80.
 
 ## halt_reason_first_latch_wins
 
