@@ -380,3 +380,30 @@ class Ledger:
             ),
             day_utc=row["day_utc"],
         )
+
+    def _write_position(self, position: Position) -> None:
+        self.conn.execute(
+            """
+            UPDATE positions SET
+                wallet_id=?, as_of_utc=?, gram_nano=?, usdt_micro=?, reserved_usdt_micro=?,
+                equity_usdt_micro=?, peak_equity_usdt_micro=?, daily_pnl_usdt_micro=?,
+                realized_pnl_usdt_micro=?, day_realized_pnl_usdt_micro=?,
+                peak_clip_equity_usdt_micro=?, day_utc=?
+            WHERE id = 1
+            """,
+            (
+                position.wallet_id,
+                position.as_of_utc,
+                position.gram_nano,
+                position.usdt_micro,
+                position.reserved_usdt_micro,
+                position.equity_usdt_micro,
+                position.peak_equity_usdt_micro,
+                position.daily_pnl_usdt_micro,
+                position.realized_pnl_usdt_micro,
+                position.day_realized_pnl_usdt_micro,
+                position.peak_clip_equity_usdt_micro,
+                position.day_utc,
+            ),
+        )
+        self.conn.commit()
