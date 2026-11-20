@@ -53,6 +53,7 @@ def test_utc_rollover_clears_daily_pnl_not_drawdown(settings, clock, ledger):
     clock.advance(1)
     bounced = ledger.mark_to_market(bounce)
     assert bounced.daily_pnl_usdt_micro == 32_530_000
+    assert bounced.day_realized_pnl_usdt_micro == 0
     assert bounced.peak_equity_usdt_micro - bounced.equity_usdt_micro >= 300_000_000
     assert first.peak_equity_usdt_micro == bounced.peak_equity_usdt_micro
 
@@ -122,6 +123,8 @@ def test_halted_reject_cycle_prints_marks(settings, clock, ledger):
     assert "entry_halt" in summary["reject_reasons"]
     assert "daily_pnl_usdt_micro" in summary
     assert "drawdown_usdt_micro" in summary
+    assert "day_realized_usdt_micro" in summary
+    assert "realized_drawdown_usdt_micro" in summary
     assert ledger.load_signal_skips(format_utc(clock.now())[:10])["halted"] == 1
     worker.close()
 
