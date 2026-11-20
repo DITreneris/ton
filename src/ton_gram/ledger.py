@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS positions (
     peak_equity_usdt_micro INTEGER NOT NULL,
     daily_pnl_usdt_micro INTEGER NOT NULL,
     realized_pnl_usdt_micro INTEGER NOT NULL,
+    day_realized_pnl_usdt_micro INTEGER NOT NULL DEFAULT 0,
+    peak_clip_equity_usdt_micro INTEGER NOT NULL DEFAULT 0,
     day_utc TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -154,6 +156,7 @@ class Ledger:
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._ensure_control()
+        self._migrate_position_columns()
         self._ensure_position()
 
     def close(self) -> None:
@@ -176,24 +179,48 @@ class Ledger:
             )
         self.conn.commit()
 
+    def _migrate_position_columns(self) -> None:
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(positions)").fetchall()}
+        if "day_realized_pnl_usdt_micro" not in cols:
+            self.conn.execute(
+                "ALTER TABLE positions ADD COLUMN day_realized_pnl_usdt_micro INTEGER NOT NULL DEFAULT 0"
+            )
+        if "peak_clip_equity_usdt_micro" not in cols:
+            cap = int(self.settings.funding_cap_usdt_micro)
+            self.conn.execute(
+                "ALTER TABLE positions ADD COLUMN peak_clip_equity_usdt_micro "
+                f"INTEGER NOT NULL DEFAULT {cap}"
+            )
+        self.conn.commit()
+        row = self.conn.execute("SELECT peak_clip_equity_usdt_micro FROM positions WHERE id = 1").fetchone()
+        if row is not None and int(row["peak_clip_equity_usdt_micro"] or 0) <= 0:
+            self.conn.execute(
+                "UPDATE positions SET peak_clip_equity_usdt_micro = ? WHERE id = 1",
+                (int(self.settings.funding_cap_usdt_micro),),
+            )
+            self.conn.commit()
+
     def _ensure_position(self) -> None:
         row = self.conn.execute("SELECT 1 FROM positions WHERE id = 1").fetchone()
         if row:
             return
         now = format_utc(self.clock.now())
+        cap = int(self.settings.funding_cap_usdt_micro)
         self.conn.execute(
             """
             INSERT INTO positions(
                 id, wallet_id, as_of_utc, gram_nano, usdt_micro, reserved_usdt_micro,
                 equity_usdt_micro, peak_equity_usdt_micro, daily_pnl_usdt_micro,
-                realized_pnl_usdt_micro, day_utc
-            ) VALUES (1, ?, ?, ?, ?, 0, 0, 0, 0, 0, '')
+                realized_pnl_usdt_micro, day_realized_pnl_usdt_micro,
+                peak_clip_equity_usdt_micro, day_utc
+            ) VALUES (1, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?, '')
             """,
             (
                 self.settings.paper_wallet_id,
                 now,
                 self.settings.paper_gram_nano,
                 self.settings.paper_usdt_micro,
+                cap,
             ),
         )
         self.conn.commit()
@@ -347,489 +374,9 @@ class Ledger:
             peak_equity_usdt_micro=row["peak_equity_usdt_micro"],
             daily_pnl_usdt_micro=row["daily_pnl_usdt_micro"],
             realized_pnl_usdt_micro=row["realized_pnl_usdt_micro"],
+            day_realized_pnl_usdt_micro=int(row["day_realized_pnl_usdt_micro"] or 0),
+            peak_clip_equity_usdt_micro=int(
+                row["peak_clip_equity_usdt_micro"] or self.settings.funding_cap_usdt_micro
+            ),
             day_utc=row["day_utc"],
         )
-
-    def _write_position(self, position: Position) -> None:
-        self.conn.execute(
-            """
-            UPDATE positions SET
-                wallet_id=?, as_of_utc=?, gram_nano=?, usdt_micro=?, reserved_usdt_micro=?,
-                equity_usdt_micro=?, peak_equity_usdt_micro=?, daily_pnl_usdt_micro=?,
-                realized_pnl_usdt_micro=?, day_utc=?
-            WHERE id = 1
-            """,
-            (
-                position.wallet_id,
-                position.as_of_utc,
-                position.gram_nano,
-                position.usdt_micro,
-                position.reserved_usdt_micro,
-                position.equity_usdt_micro,
-                position.peak_equity_usdt_micro,
-                position.daily_pnl_usdt_micro,
-                position.realized_pnl_usdt_micro,
-                position.day_utc,
-            ),
-        )
-        self.conn.commit()
-
-    def mark_to_market(self, mid_usdt_per_gram_micro: int) -> Position:
-        position = self.get_position()
-        now = format_utc(self.clock.now())
-        day = now[:10]
-        equity = mark_usdt_micro(position.gram_nano, position.usdt_micro, mid_usdt_per_gram_micro)
-        if day != position.day_utc:
-            position.daily_pnl_usdt_micro = 0
-            position.day_utc = day
-            sod_equity = equity
-        else:
-            sod_equity = equity - position.daily_pnl_usdt_micro
-            # keep daily as equity - start-of-day; start-of-day inferred from previous daily
-            start = position.equity_usdt_micro - position.daily_pnl_usdt_micro
-            sod_equity = start
-        position.as_of_utc = now
-        position.equity_usdt_micro = equity
-        position.daily_pnl_usdt_micro = equity - sod_equity
-        position.peak_equity_usdt_micro = max(position.peak_equity_usdt_micro, equity)
-        self._write_position(position)
-        return position
-
-    def unresolved_intents(self, wallet_id: str | None = None) -> list[Intent]:
-        wallet = wallet_id or self.settings.paper_wallet_id
-        rows = self.conn.execute(
-            "SELECT * FROM intents WHERE wallet_id = ? AND status = ? ORDER BY created_at_utc",
-            (wallet, IntentStatus.RESERVED.value),
-        ).fetchall()
-        return [_intent_from_row(row) for row in rows]
-
-    def reserve_intent(self, intent: Intent) -> None:
-        if self.unresolved_intents(intent.wallet_id):
-            raise RuntimeError("one unresolved intent per wallet")
-        self.conn.execute(
-            """
-            INSERT INTO intents(
-                intent_id, wallet_id, candidate_id, quote_id, decision_id, policy_version,
-                direction, offer_units, reserved_usdt_micro, status, created_at_utc,
-                expires_at_utc, terminal_at_utc, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                intent.intent_id,
-                intent.wallet_id,
-                intent.candidate_id,
-                intent.quote_id,
-                intent.decision_id,
-                intent.policy_version,
-                intent.direction.value,
-                intent.offer_units,
-                intent.reserved_usdt_micro,
-                intent.status.value,
-                intent.created_at_utc,
-                intent.expires_at_utc,
-                intent.terminal_at_utc,
-                intent.notes,
-            ),
-        )
-        position = self.get_position()
-        position.reserved_usdt_micro += intent.reserved_usdt_micro
-        self._write_position(position)
-
-    def _close_intent(self, intent_id: str, status: IntentStatus, notes: str) -> None:
-        now = format_utc(self.clock.now())
-        row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
-        if row is None:
-            return
-        intent = _intent_from_row(row)
-        if intent.status is not IntentStatus.RESERVED:
-            return
-        self.conn.execute(
-            "UPDATE intents SET status = ?, terminal_at_utc = ?, notes = ? WHERE intent_id = ?",
-            (status.value, now, notes, intent_id),
-        )
-        position = self.get_position()
-        position.reserved_usdt_micro = max(0, position.reserved_usdt_micro - intent.reserved_usdt_micro)
-        self._write_position(position)
-
-    def save_fill(self, fill: PaperFill, direction: Direction) -> Position:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO fills(fill_id, intent_id, quote_id, filled_at_utc, payload_json) VALUES (?, ?, ?, ?, ?)",
-            (fill.fill_id, fill.intent_id, fill.quote_id, fill.filled_at_utc, _json(to_plain(fill))),
-        )
-        intent_row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (fill.intent_id,)).fetchone()
-        intent = _intent_from_row(intent_row)
-        position = self.get_position()
-        gram, usdt = apply_fill_to_balances(
-            gram_nano=position.gram_nano,
-            usdt_micro=position.usdt_micro,
-            direction=direction,
-            offer_units=intent.offer_units,
-            fill=fill,
-            gas_reserve_nano=self.settings.gram_gas_reserve_nano,
-        )
-        realized = position.realized_pnl_usdt_micro - fill.network_cost_usdt_micro
-        if direction is Direction.GRAM_TO_USDT:
-            realized += fill.filled_ask_units - (
-                (intent.offer_units * fill.mid_usdt_per_gram_micro) // 1_000_000_000
-            )
-        else:
-            received = (fill.filled_ask_units * fill.mid_usdt_per_gram_micro) // 1_000_000_000
-            realized += received - intent.offer_units
-        position.gram_nano = gram
-        position.usdt_micro = usdt
-        position.realized_pnl_usdt_micro = realized
-        self._write_position(position)
-        self._close_intent(fill.intent_id, IntentStatus.FILLED_PAPER, "paper_fill")
-        return self.mark_to_market(fill.mid_usdt_per_gram_micro)
-
-    def expire_intent(self, intent_id: str, notes: str) -> None:
-        self._close_intent(intent_id, IntentStatus.EXPIRED, notes)
-
-    def reject_intent(self, intent_id: str, notes: str) -> None:
-        self._close_intent(intent_id, IntentStatus.REJECTED, notes)
-
-    def recover(self) -> list[dict[str, Any]]:
-        """Reconcile reserved intents. Same delay/TTL clock as settle_due_intents.
-
-        Missing quote → SETTLEMENT_UNKNOWN. TTL lapse → EXPIRED (no halt).
-        Delay not elapsed → leave RESERVED for settle_due. Do not fill early.
-        """
-        outcomes: list[dict[str, Any]] = []
-        now = self.clock.now()
-        for intent in self.unresolved_intents():
-            quote = self.get_quote(intent.quote_id)
-            expired = now >= parse_utc(intent.expires_at_utc)
-            due = parse_utc(intent.created_at_utc) + timedelta(seconds=self.settings.delay_stress_s)
-            if quote is None:
-                self._close_intent(intent.intent_id, IntentStatus.RECONCILED_UNKNOWN, "missing_quote")
-                self.latch_halt(HaltReason.SETTLEMENT_UNKNOWN)
-                outcomes.append({"intent_id": intent.intent_id, "status": "RECONCILED_UNKNOWN"})
-                continue
-            if expired:
-                self.expire_intent(intent.intent_id, "restart_expired")
-                outcomes.append({"intent_id": intent.intent_id, "status": "EXPIRED"})
-                continue
-            if now < due:
-                outcomes.append({"intent_id": intent.intent_id, "status": "PENDING_DELAY"})
-                continue
-            fill = simulate_fill(
-                fill_id=self.next_id("fill"),
-                intent_id=intent.intent_id,
-                quote=quote,
-                offer_units=intent.offer_units,
-                filled_at_utc=format_utc(now),
-                settings=self.settings,
-                mid_usdt_per_gram_micro=quote.usdt_per_gram_micro,
-            )
-            self.save_fill(fill, intent.direction)
-            outcomes.append({"intent_id": intent.intent_id, "status": "FILLED_PAPER", "fill_id": fill.fill_id})
-        self.set_control("recovered", "1")
-        return outcomes
-
-    def create_paper_intent(self, candidate: Candidate, quote: Quote, decision: RiskDecision) -> Intent:
-        now = self.clock.now()
-        intent = Intent(
-            intent_id=self.next_id("int"),
-            wallet_id=self.settings.paper_wallet_id,
-            candidate_id=candidate.candidate_id,
-            quote_id=quote.quote_id,
-            policy_version=decision.policy_version,
-            decision_id=decision.decision_id,
-            direction=candidate.direction,
-            offer_units=candidate.offer_units,
-            reserved_usdt_micro=decision.reserved_usdt_micro,
-            status=IntentStatus.RESERVED,
-            created_at_utc=format_utc(now),
-            expires_at_utc=format_utc(now + timedelta(seconds=self.settings.intent_ttl_s)),
-            notes="paper_reserved",
-        )
-        self.reserve_intent(intent)
-        return intent
-
-    def settle_due_intents(self, mid_usdt_per_gram_micro: int) -> list[PaperFill]:
-        fills: list[PaperFill] = []
-        now = self.clock.now()
-        for intent in self.unresolved_intents():
-            created = parse_utc(intent.created_at_utc)
-            due = created + timedelta(seconds=self.settings.delay_stress_s)
-            if now < due:
-                continue
-            quote = self.get_quote(intent.quote_id)
-            if quote is None:
-                self._close_intent(intent.intent_id, IntentStatus.RECONCILED_UNKNOWN, "missing_quote")
-                self.latch_halt(HaltReason.SETTLEMENT_UNKNOWN)
-                continue
-            if now >= parse_utc(intent.expires_at_utc):
-                self.expire_intent(intent.intent_id, "ttl_expired")
-                continue
-            fill = simulate_fill(
-                fill_id=self.next_id("fill"),
-                intent_id=intent.intent_id,
-                quote=quote,
-                offer_units=intent.offer_units,
-                filled_at_utc=format_utc(now),
-                settings=self.settings,
-                mid_usdt_per_gram_micro=mid_usdt_per_gram_micro,
-            )
-            self.save_fill(fill, intent.direction)
-            fills.append(fill)
-        return fills
-
-    def save_snapshot(self, snapshot: dict[str, Any]) -> None:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO snapshots(snapshot_id, as_of_utc, policy_version, payload_json) VALUES (?, ?, ?, ?)",
-            (
-                snapshot["snapshot_id"],
-                snapshot["as_of_utc"],
-                snapshot["policy_version"],
-                _json(snapshot),
-            ),
-        )
-        self.conn.commit()
-
-    def latest_snapshot(self) -> dict[str, Any] | None:
-        row = self.conn.execute("SELECT payload_json FROM snapshots ORDER BY as_of_utc DESC LIMIT 1").fetchone()
-        return json.loads(row["payload_json"]) if row else None
-
-    def get_snapshot(self, snapshot_id: str) -> dict[str, Any] | None:
-        row = self.conn.execute(
-            "SELECT payload_json FROM snapshots WHERE snapshot_id = ?",
-            (snapshot_id,),
-        ).fetchone()
-        return json.loads(row["payload_json"]) if row else None
-
-    def record_assessment(self, snapshot_id: str | None, status: AssessmentRecordStatus, payload: dict[str, Any]) -> None:
-        self.conn.execute(
-            "INSERT INTO assessments(received_at_utc, snapshot_id, record_status, payload_json) VALUES (?, ?, ?, ?)",
-            (format_utc(self.clock.now()), snapshot_id, status.value, _json(payload)),
-        )
-        self.conn.commit()
-
-    def counts(self) -> dict[str, int]:
-        out: dict[str, int] = {}
-        for table in ("quotes", "candidates", "risk_decisions", "intents", "fills", "snapshots", "assessments"):
-            row = self.conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
-            out[table] = int(row["n"])
-        for key, verdict in (
-            ("approvals", RiskVerdict.APPROVE.value),
-            ("rejections", RiskVerdict.REJECT.value),
-        ):
-            row = self.conn.execute(
-                "SELECT COUNT(*) AS n FROM risk_decisions WHERE verdict = ?",
-                [verdict],
-            ).fetchone()
-            out[key] = int(row["n"])
-        return out
-
-    def day_rows(self, day_utc: str) -> dict[str, Iterable[sqlite3.Row]]:
-        return {
-            "candidates": self.conn.execute(
-                "SELECT * FROM candidates WHERE created_at_utc LIKE ?", (f"{day_utc}%",)
-            ).fetchall(),
-            "decisions": self.conn.execute(
-                "SELECT * FROM risk_decisions WHERE created_at_utc LIKE ?", (f"{day_utc}%",)
-            ).fetchall(),
-            "intents": self.conn.execute(
-                "SELECT * FROM intents WHERE created_at_utc LIKE ?", (f"{day_utc}%",)
-            ).fetchall(),
-            "fills": self.conn.execute(
-                "SELECT * FROM fills WHERE filled_at_utc LIKE ?", (f"{day_utc}%",)
-            ).fetchall(),
-        }
-
-    def save_daily_report(self, day_utc: str, payload: dict[str, Any]) -> None:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO daily_reports(day_utc, created_at_utc, payload_json) VALUES (?, ?, ?)",
-            (day_utc, format_utc(self.clock.now()), _json(payload)),
-        )
-        self.conn.commit()
-
-    def recent_alert(self, alert_key: str, within_s: int) -> bool:
-        cutoff = format_utc(self.clock.now() - timedelta(seconds=within_s))
-        row = self.conn.execute(
-            "SELECT 1 FROM alerts WHERE alert_key = ? AND sent_at_utc >= ? LIMIT 1",
-            (alert_key, cutoff),
-        ).fetchone()
-        return row is not None
-
-    def record_alert(self, alert_key: str) -> None:
-        self.conn.execute(
-            "INSERT OR IGNORE INTO alerts(alert_key, sent_at_utc) VALUES (?, ?)",
-            (alert_key, format_utc(self.clock.now())),
-        )
-        self.conn.commit()
-
-    def record_heartbeat(self) -> None:
-        self.set_control("last_heartbeat_utc", format_utc(self.clock.now()))
-
-    def last_heartbeat_utc(self) -> str:
-        return self.get_control("last_heartbeat_utc")
-
-    def record_feed_samples(self, feed_health: dict[str, Any], quote_age_ms: int | None) -> None:
-        now = format_utc(self.clock.now())
-        for name, health in feed_health.items():
-            self.conn.execute(
-                "INSERT INTO feed_samples(as_of_utc, name, status, latency_ms, quote_age_ms) VALUES (?, ?, ?, ?, ?)",
-                (
-                    now,
-                    name,
-                    str((health or {}).get("status") or "UNKNOWN"),
-                    (health or {}).get("latency_ms"),
-                    quote_age_ms,
-                ),
-            )
-        self.conn.commit()
-
-    def save_gas_profile(self, profile: dict[str, Any]) -> None:
-        self.set_control("gas_profile_json", _json(profile))
-
-    def load_gas_profile(self) -> dict[str, Any] | None:
-        raw = self.get_control("gas_profile_json")
-        if not raw:
-            return None
-        return json.loads(raw)
-
-    def save_strategy_state(self, payload: dict[str, Any]) -> None:
-        self.set_control("strategy_state_json", _json(payload))
-
-    def load_strategy_state(self) -> dict[str, Any] | None:
-        raw = self.get_control("strategy_state_json")
-        if not raw:
-            return None
-        return json.loads(raw)
-
-    def load_signal_skips(self, day_utc: str) -> dict[str, int]:
-        empty = {
-            "warming": 0,
-            "flat": 0,
-            "cooldown": 0,
-            "spread": 0,
-            "feed_down": 0,
-            "halted": 0,
-            "emitted": 0,
-            "approved": 0,
-        }
-        raw = self.get_control(f"signal_skips_{day_utc}")
-        if not raw:
-            return empty
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return empty
-        out = dict(empty)
-        for key, value in data.items():
-            out[str(key)] = int(value or 0)
-        return out
-
-    def bump_signal_skip(self, day_utc: str, skip: str | None) -> dict[str, int]:
-        counts = self.load_signal_skips(day_utc)
-        bucket = skip or "emitted"
-        counts[bucket] = int(counts.get(bucket) or 0) + 1
-        self.set_control(f"signal_skips_{day_utc}", json.dumps(counts))
-        return counts
-
-    def get_intent(self, intent_id: str) -> Intent | None:
-        row = self.conn.execute("SELECT * FROM intents WHERE intent_id = ?", (intent_id,)).fetchone()
-        return _intent_from_row(row) if row else None
-
-    def fills_for_intent(self, intent_id: str) -> list[dict[str, Any]]:
-        rows = self.conn.execute("SELECT * FROM fills WHERE intent_id = ?", (intent_id,)).fetchall()
-        return [dict(row) | {"payload": json.loads(row["payload_json"])} for row in rows]
-
-    def halt_events_for_day(self, day_utc: str) -> list[dict[str, Any]]:
-        rows = self.conn.execute(
-            "SELECT * FROM halt_events WHERE as_of_utc LIKE ? ORDER BY as_of_utc",
-            (f"{day_utc}%",),
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-    def feed_samples_for_day(self, day_utc: str) -> list[dict[str, Any]]:
-        rows = self.conn.execute(
-            "SELECT * FROM feed_samples WHERE as_of_utc LIKE ?",
-            (f"{day_utc}%",),
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-    def quote_ages_ms_for_day(self, day_utc: str) -> list[int]:
-        rows = self.conn.execute(
-            "SELECT quote_age_ms FROM feed_samples WHERE as_of_utc LIKE ? AND quote_age_ms IS NOT NULL",
-            (f"{day_utc}%",),
-        ).fetchall()
-        return [int(row["quote_age_ms"]) for row in rows]
-
-    def reset_paper(self, reason: str = "OPERATOR") -> dict[str, Any]:
-        """Return paper balances to genesis. Does not touch drill.sqlite3."""
-        now = format_utc(self.clock.now())
-        mid = 0
-        quotes = self.latest_quotes()
-        if quotes:
-            sample = next(iter(quotes.values()))
-            mid = sample.usdt_per_gram_micro
-        gram = self.settings.paper_gram_nano
-        usdt = self.settings.paper_usdt_micro
-        equity = mark_usdt_micro(gram, usdt, mid)
-        for table in ("fills", "intents", "candidates", "risk_decisions", "events", "daily_reports"):
-            self.conn.execute(f"DELETE FROM {table}")
-        self.conn.execute(
-            """
-            UPDATE positions SET
-                as_of_utc=?, gram_nano=?, usdt_micro=?, reserved_usdt_micro=0,
-                equity_usdt_micro=?, peak_equity_usdt_micro=?, daily_pnl_usdt_micro=0,
-                realized_pnl_usdt_micro=0, day_utc=?
-            WHERE id = 1
-            """,
-            (now, gram, usdt, equity, equity, now[:10]),
-        )
-        self.set_control("entry_halt", "0")
-        self.set_control("halt_reason", "")
-        self.set_control("recovered", "0")
-        self.set_control("strategy_state_json", "")
-        self.set_control("learn_last_json", "")
-        stale_skips = self.conn.execute(
-            "SELECT k FROM control_state WHERE k LIKE 'signal_skips_%'"
-        ).fetchall()
-        for row in stale_skips:
-            self.conn.execute("DELETE FROM control_state WHERE k = ?", (row["k"],))
-        self.conn.commit()
-        self.conn.execute(
-            "INSERT INTO halt_events(as_of_utc, action, reason) VALUES (?, ?, ?)",
-            (now, "reset", reason),
-        )
-        self.conn.commit()
-        return {
-            "reset": True,
-            "reason": reason,
-            "as_of_utc": now,
-            "gram_nano": gram,
-            "usdt_micro": usdt,
-            "equity_usdt_micro": equity,
-            "entry_halt": False,
-            "fills": 0,
-            "intents": 0,
-        }
-
-
-def _quote_from_payload(payload: dict[str, Any]) -> Quote:
-    payload = dict(payload)
-    payload["direction"] = Direction(payload["direction"])
-    payload.pop("usdt_per_gram_micro", None)
-    return Quote(**payload)
-
-
-def _intent_from_row(row: sqlite3.Row) -> Intent:
-    return Intent(
-        intent_id=row["intent_id"],
-        wallet_id=row["wallet_id"],
-        candidate_id=row["candidate_id"],
-        quote_id=row["quote_id"],
-        policy_version=row["policy_version"],
-        decision_id=row["decision_id"],
-        direction=Direction(row["direction"]),
-        offer_units=row["offer_units"],
-        reserved_usdt_micro=row["reserved_usdt_micro"],
-        status=IntentStatus(row["status"]),
-        created_at_utc=row["created_at_utc"],
-        expires_at_utc=row["expires_at_utc"],
-        terminal_at_utc=row["terminal_at_utc"],
-        notes=row["notes"],
-    )
