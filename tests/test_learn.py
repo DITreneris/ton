@@ -448,6 +448,7 @@ def test_run_learn_names_inventory_mark_from_ledger(
     payload = run_learn(ledger, clock, settings=settings)
     ids = [item["id"] for item in payload["lessons"]]
     assert "daily_loss_marks_inventory" in ids
+    assert "risk_floors_are_realized" in ids
     assert payload["evaluation"]["signals"]["daily_loss_rejects"] == 1
     assert payload["learning_update"]["apply"] is False
     assert payload["learning_update"]["recommended"]["strategy_entry_deviation_bps"] == 25
