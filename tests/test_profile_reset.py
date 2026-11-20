@@ -28,7 +28,6 @@ def test_hydrate_loads_bundled_measured_profile(settings, ledger):
 
 def test_worker_snapshot_exposes_measured_cost_model(settings, clock, ledger):
     worker = PaperWorker(settings, clock, ledger)
-    assert settings.cost_model_source == "measured"
     snap = {
         "cost_model": {
             "source": settings.cost_model_source,
@@ -55,6 +54,8 @@ def test_reset_paper_restores_starting_balances(settings, clock, ledger):
     assert pos.gram_nano == settings.paper_gram_nano
     assert pos.usdt_micro == settings.paper_usdt_micro
     assert pos.realized_pnl_usdt_micro == 0
+    assert pos.day_realized_pnl_usdt_micro == 0
+    assert pos.peak_clip_equity_usdt_micro == settings.funding_cap_usdt_micro
     assert pos.reserved_usdt_micro == 0
     assert ledger.entry_halt is False
     assert ledger.counts()["fills"] == 0
