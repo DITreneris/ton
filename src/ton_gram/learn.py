@@ -169,3 +169,235 @@ def evaluate_paper_day(report: dict[str, Any], *, rules: dict[str, Any] | None =
         },
         "rules_used": rules,
     }
+
+
+def extract_lessons(evaluation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Lessons box. Reusable, not a quote stream."""
+    lessons: list[dict[str, Any]] = []
+    sig = evaluation.get("signals") or {}
+    total = int(sig.get("cycles") or 0)
+    spread = int(sig.get("spread") or 0)
+    flat = int(sig.get("flat") or 0)
+    emitted = int(sig.get("emitted") or 0)
+    trades = int(sig.get("trades") or 0)
+
+    if total and spread * 2 > total:
+        lessons.append(
+            {
+                "id": "spread_gate_too_tight",
+                "severity": "high",
+                "text": "Most cycles skipped as spread. Do not lower the 25 bps entry gate. Check mid_spread_max_bps vs live bid-ask.",
+            }
+        )
+    if total and flat * 10 >= total * 8 and emitted == 0 and int(sig.get("halted") or 0) == 0:
+        lessons.append(
+            {
+                "id": "quiet_book_is_not_a_bug",
+                "severity": "info",
+                "text": "Book is flat vs SMA. That is the baseline working. Do not manufacture trades.",
+            }
+        )
+    if trades:
+        lessons.append(
+            {
+                "id": "audit_fills_after_costs",
+                "severity": "info",
+                "text": (
+                    "Fills exist. Score Phase 1 net after fee, impact, 50 bps slip, delay, and measured gas — "
+                    "not a reserved intent and not win rate. A 25 bps 2-minute fade vs ~80–135 bps stressed "
+                    "cost is expected to fail net > 0. That is the verdict, not a retune. "
+                    "Do not lower 25 bps. Do not raise the 80 bps gate. Gas is in the score, not the reject."
+                ),
+            }
+        )
+    if int(sig.get("all_in_rejects") or 0) and emitted:
+        lessons.append(
+            {
+                "id": "all_in_cost_gate",
+                "severity": "high",
+                "text": "Risk rejected on all_in_cost. Inspect fee+impact+50bps slip vs max_all_in_cost_bps=80. Do not lower 25 bps.",
+            }
+        )
+    if (
+        sig.get("halt")
+        and trades == 0
+        and (
+            int(sig.get("halted") or 0)
+            or (
+                emitted
+                and (int(sig.get("entry_halt_rejects") or 0) or int(sig.get("drawdown_rejects") or 0))
+            )
+        )
+    ):
+        lessons.append(
+            {
+                "id": "halted_print_is_not_fill_two",
+                "severity": "high",
+                "text": (
+                    "A 25 bps print while entry is halted is a rejected candidate, not fill 2/8. "
+                    "entry_halt is the sticky latch. drawdown_limit means peak is still through $300. "
+                    "entry_halt alone means the floor recovered this cycle, not that rearm is safe. "
+                    "Do not rearm. Do not lower 25 bps. Do not reset-paper."
+                ),
+            }
+        )
+    if (
+        sig.get("halt")
+        and int(sig.get("daily_pnl_usdt_micro") or 0) > 0
+        and int(sig.get("drawdown_usdt_micro") or 0) >= DRAWDOWN_FLOOR_USDT_MICRO
+    ):
+        lessons.append(
+            {
+                "id": "read_drawdown_not_daily_pnl",
+                "severity": "high",
+                "text": (
+                    "Daily P&L is green vs UTC start-of-day while peak drawdown is still through $300. "
+                    "Trust drawdown_usdt_micro on the cycle, not today's mark. Do not rearm."
+                ),
+            }
+        )
+    if sig.get("halt") and int(sig.get("drawdown_usdt_micro") or 0) >= DRAWDOWN_FLOOR_USDT_MICRO:
+        lessons.append(
+            {
+                "id": "halt_does_not_freeze_peak",
+                "severity": "high",
+                "text": (
+                    "entry_halt blocks clips, not marks. Peak equity still ratchets on a new high. "
+                    "The hole is vs that peak, not vs UTC midnight and not vs the last under-floor tick. "
+                    "Do not rearm because drawdown_limit dropped off a reject list."
+                ),
+            }
+        )
+    if int(sig.get("feed_down") or 0) and sig.get("halt_reason") == "LIMIT_BREACH":
+        lessons.append(
+            {
+                "id": "feed_down_is_not_warming",
+                "severity": "info",
+                "text": (
+                    "STON.fi simulate 500s are skip=feed_down / scope=UNAVAILABLE. "
+                    "halt_reason stayed LIMIT_BREACH. That is an explained blip. "
+                    "Do not restart the 7-day clock. Filter Railway on provider failure, not severity=error."
+                ),
+            }
+        )
+    if (
+        sig.get("halt_reason") == "LIMIT_BREACH"
+        and int(sig.get("daily_loss_rejects") or 0)
+        and inventory_mark_dominates(
+            int(sig.get("realized_usdt_micro") or 0),
+            int(sig.get("unrealized_usdt_micro") or 0),
+        )
+    ):
+        lessons.append(
+            {
+                "id": "daily_loss_marks_inventory",
+                "severity": "high",
+                "text": (
+                    "LIMIT_BREACH on daily_loss_limit is marked genesis inventory "
+                    "(default 5000 GRAM), not a blown clip. $100 is ~$0.02/GRAM "
+                    "(~170 bps at $1.16). Risk only sees this on the next candidate; "
+                    "flat cycles can sit under the floor with halt=false. "
+                    "Do not rearm to manufacture fills. Do not lower 25 bps."
+                ),
+            }
+        )
+    realized_now = int(sig.get("realized_usdt_micro") or 0)
+    realized_dd = int(sig.get("realized_drawdown_usdt_micro") or 0)
+    marked_dd = int(sig.get("drawdown_usdt_micro") or 0)
+    floors_open = (
+        realized_dd < DRAWDOWN_FLOOR_USDT_MICRO
+        and realized_now > -DAILY_LOSS_FLOOR_USDT_MICRO
+    )
+    inventory_hole = inventory_mark_dominates(
+        realized_now, int(sig.get("unrealized_usdt_micro") or 0)
+    ) or marked_dd >= DRAWDOWN_FLOOR_USDT_MICRO
+    if floors_open and inventory_hole:
+        lessons.append(
+            {
+                "id": "risk_floors_are_realized",
+                "severity": "high",
+                "text": (
+                    "Halt floors are realized clip P&L, not marked 5 000 GRAM. "
+                    "A −$118 mark or a $1.2k marked hole with day_realized=0 does not latch. "
+                    "Rearm after this ships — not because daily P&L is green. Do not reset-paper. "
+                    "Do not lower 25 bps. Do not raise 80. If $100 realized or $300 realized "
+                    "from clip peak burns, halt is doing its job on trades."
+                ),
+            }
+        )
+    for err in evaluation.get("errors") or []:
+        if str(err).startswith("all_in_cost"):
+            continue
+        lessons.append({"id": "error", "severity": "high", "text": err})
+    for gap in evaluation.get("gaps") or []:
+        if gap not in {lesson["text"] for lesson in lessons}:
+            lessons.append({"id": "gap", "severity": "low", "text": gap})
+    if not lessons:
+        lessons.append(
+            {
+                "id": "hold",
+                "severity": "info",
+                "text": "No rule change. Keep paper-only, outbound Telegram, and the 25 bps gate.",
+            }
+        )
+    return lessons
+
+
+def recommend_rules(evaluation: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Learning-update box. Advisory only. Never changes signing or entry deviation."""
+    current = dict(current or PINNED_RULES)
+    recommended = dict(current)
+    notes: list[str] = []
+    sig = evaluation.get("signals") or {}
+    total = int(sig.get("cycles") or 0)
+    spread = int(sig.get("spread") or 0)
+    if total and spread * 2 > total and int(current.get("mid_spread_max_bps") or 0) < 200:
+        recommended["mid_spread_max_bps"] = 200
+        notes.append("raise mid_spread_max_bps to 200 so a healthy bid-ask is not skip=spread")
+    recommended["signing"] = False
+    recommended["broadcast"] = False
+    recommended["strategy_entry_deviation_bps"] = int(PINNED_RULES["strategy_entry_deviation_bps"])
+    recommended["max_all_in_cost_bps"] = int(PINNED_RULES["max_all_in_cost_bps"])
+    return {"recommended": recommended, "apply": False, "notes": notes}
+
+
+def run_learn(
+    ledger: Ledger,
+    clock: Clock,
+    day_utc: str | None = None,
+    settings: Settings | None = None,
+) -> dict[str, Any]:
+    """One closed loop: report (logs) → evaluate → lessons → advisory rules."""
+    settings = settings or ledger.settings
+    rules = rules_from_settings(settings)
+    report = build_daily_report(ledger, clock, day_utc)
+    evaluation = evaluate_paper_day(report, rules=rules)
+    lessons = extract_lessons(evaluation)
+    update = recommend_rules(evaluation, rules)
+    payload = {
+        "as_of_utc": format_utc(clock.now()),
+        "day_utc": report.get("day_utc"),
+        "mode": "PAPER",
+        "evaluation": evaluation,
+        "lessons": lessons,
+        "learning_update": update,
+        "notes": [
+            "Deterministic closed loop. No model overlay.",
+            "Rules are advisory. The worker does not auto-apply them.",
+            "Phase 1 net is after fee, impact, 50 slip, delay, and gas. Gas is not in the 80 bps reject gate.",
+            "Do not lower 25 bps. Do not raise max_all_in_cost_bps.",
+            "No signatures and no broadcasts were produced.",
+        ],
+    }
+    ledger.set_control(LEARN_CONTROL_KEY, json.dumps(payload))
+    return payload
+
+
+def load_learn(ledger: Ledger) -> dict[str, Any] | None:
+    raw = ledger.get_control(LEARN_CONTROL_KEY)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
