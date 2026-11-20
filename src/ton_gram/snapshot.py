@@ -9,7 +9,7 @@ from ton_gram.config import Settings
 from ton_gram.ledger import Ledger
 from ton_gram.models import Direction, Quote, ScopeVerification, to_plain
 from ton_gram.learn import load_learn
-from ton_gram.risk import quote_age_ms
+from ton_gram.risk import quote_age_ms, realized_drawdown_usdt_micro
 
 
 def _evidence(
@@ -193,6 +193,10 @@ def build_snapshot(
                 "equity_usdt_micro": position.equity_usdt_micro,
                 "daily_pnl_usdt_micro": position.daily_pnl_usdt_micro,
                 "realized_pnl_usdt_micro": position.realized_pnl_usdt_micro,
+                "day_realized_pnl_usdt_micro": position.day_realized_pnl_usdt_micro,
+                "peak_clip_equity_usdt_micro": position.peak_clip_equity_usdt_micro,
+                "drawdown_usdt_micro": position.peak_equity_usdt_micro - position.equity_usdt_micro,
+                "realized_drawdown_usdt_micro": realized_drawdown_usdt_micro(position, settings),
             },
             "mid_usdt_per_gram_micro": mid_usdt_per_gram_micro,
         },
