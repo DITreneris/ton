@@ -4,6 +4,8 @@ Paper-mode only worker for **native GRAM** (formerly Toncoin) ↔ **issuer-verif
 
 This build **does not sign, does not hold private keys, and does not broadcast**. It reads live mainnet quotes and pool data, runs a deterministic baseline, and writes a simulated ledger plus the monitoring snapshot the Grok Risk Monitor expects.
 
+Ambition and evidence gates are in [`ROADMAP.md`](ROADMAP.md): prove a net edge on this paper worker, then — and only then — an isolated live gateway. The next phase opens the day the table is green, not in January 2027.
+
 ## What is pinned
 
 Identity is addresses, never tickers.
@@ -29,19 +31,21 @@ All amounts are integer base units: GRAM nano (9 dp), USD₮ micro (6 dp).
 | Position cap | 2% of funding cap (`POSITION_CAP_BPS=200`) |
 | Funding cap | 10,000 USD₮ |
 | Max aggregate exposure | Same 2% cap, including reserved intents |
-| Daily loss | 1% of funding cap |
-| Drawdown | 3% from peak marked equity |
+| Daily loss | 1% of funding cap on **realized** clip P&L (`day_realized`) |
+| Drawdown | 3% from peak **realized clip** equity (fills only; marked 5 000 GRAM is telemetry) |
 | Max trade | 50 USD₮ |
 | Max quote age | 15 s |
 | Min pool liquidity | $500,000 |
 | GRAM gas reserve | 0.25 GRAM (cannot be offered) |
 | Conservative extra slippage | 50 bps |
+| Max all-in cost | **80 bps** (`fee + impact + 50` slip). Above this, risk rejects `all_in_cost` |
+| Intent TTL | 45 s. Recover after TTL → `EXPIRED`, not `SETTLEMENT_UNKNOWN` |
 | Delay stress | measured p90 latency + 2 s (fallback 8 s + 5 bps if no profile) |
 | Network cost | measured p90 net GRAM + 25% (fallback quoted gas + 1× extra) |
 | One unresolved intent | Per paper wallet |
 | Entry halt | Sticky across restarts; requires `ton-gram rearm` or `POST /v1/control/rearm` |
 
-Paper fills apply pool fee, price impact, stressed gas, conservative slippage, and delay. Restart recovery reconciles reserved intents to a terminal paper state **before** new intents are accepted.
+Paper fills apply pool fee, price impact, stressed gas, conservative slippage, and delay. Restart recovery uses the **same** delay/TTL clock as a live cycle: it does not fill early; a missing quote latches `SETTLEMENT_UNKNOWN`; a TTL lapse expires the intent without a halt card.
 
 ## Run locally
 
@@ -87,13 +91,37 @@ pytest
 
 ## Snapshot endpoint shape
 
-`GET /v1/snapshot` returns one JSON object. `POST /v1/monitor-result` validates the Grok `MONITOR_RESULT` contract. `GET /v1/report/daily` returns the UTC paper day. `GET /v1/docs` returns the document index.
+`GET /v1/snapshot` returns one JSON object:
+
+```json
+{
+  "schema_version": "1.0",
+  "snapshot_id": "snap_...",
+  "as_of_utc": "2026-11-05T04:40:00Z",
+  "policy_version": "paper-1.0.0",
+  "mode": "PAPER",
+  "scope_verification": { "status": "PASS", "network": "mainnet", "checks": [] },
+  "freshness": { "quote_age_ms": 12, "max_quote_age_ms": 15000, "stale": false },
+  "feed_health": { "stonfi_quotes": { "status": "UP", "latency_ms": 80 } },
+  "cost_model": { "source": "measured", "delay_stress_s": 3, "measured_net_cost_p90_nano": 210479331, "profile": {} },
+  "required_coverage": { "quotes_both_directions": true, "pool_liquidity": true, "scope": true },
+  "incidents": [],
+  "open_execution_state": { "unresolved_intents": [], "entry_halt": false, "position": {} },
+  "evidence_registry": [{ "evidence_id": "ev_...", "kind": "QUOTE" }]
+}
+```
+
+`POST /v1/monitor-result` validates the Grok `MONITOR_RESULT` contract (schema, snapshot binding, evidence-ID membership, late-result window) and records `VALID` / `INVALID_*` / `UNAVAILABLE`. Invalid or missing assessments have **zero execution authority**.
+
+`GET /v1/report/daily?date=YYYY-MM-DD` (same snapshot bearer) returns trades, gross/net PnL after stressed costs, drawdown, fees, rejected candidates by reason, halt events, feed uptime, and quote-age stats. Omit `date` for today UTC.
 
 ## Closed learning loop
 
 The Prompt Anatomy diagram is a full coding OS. This repo is a paper trader. Only the right-hand loop is wired here: **logs → evaluate → lessons → advisory rules**.
 
-`python -m ton_gram learn` (or `POST /v1/learn`) scores the UTC paper day. Rules are advisory. No auto-apply. It will not lower the 25 bps entry gate or turn signing on.
+`python -m ton_gram learn` (or `POST /v1/learn` with the snapshot bearer) scores the UTC paper day from the ledger. `rules_used` comes from the live `Settings`. It writes lessons and recommended rules into `control_state.learn_last_json`. `GET /v1/learn` returns the last pass. The next snapshot copies that payload under `learning`. `reset-paper` clears that key.
+
+This pass is deterministic. There is no LLM, no extra agent roster, and **no auto-apply**. It will not lower the 25 bps entry gate, will not raise the 80 bps all-in cap, and will not turn signing on. A quiet/flat book is scored as the working baseline. `all_in_cost` rejects are a named lesson, not a reason to loosen the fade. `LIMIT_BREACH` on `daily_loss_limit` is `daily_loss_marks_inventory` only when unrealized inventory mark is the loss driver — $100 = ~$0.02/GRAM (~170 bps at $1.16), and only the next candidate latches halt. Learn does not write the document catalog — file a note and `docs sync`.
 
 ## Document index and versions
 
@@ -107,6 +135,38 @@ curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/docs"
 
 Unchanged hashes are no-ops. There is no CMS, no extra database, and no auto-edit of paper policy from the learning loop.
 
+## Gas refund measurement
+
+`python -m ton_gram measure-gas` is read-only. It pages public TonAPI events on the pinned STON.fi v2 pool, keeps finalized GRAM↔USD₮ JettonSwaps, walks each trace, and records attached GRAM, excess refunded to the user, net network cost, and first-external to final-credit latency. CSV lands at `artifacts/gas_refunds.csv` and `data/gas_refunds.csv`. The paper cost model replaces the old 8s+5bps assumption with measured p90 latency plus `TON_GRAM_LATENCY_STRESS_MARGIN_S` (default 2s) and measured p90 net cost plus `TON_GRAM_NETWORK_COST_STRESS_MARGIN_BPS` (default 2500). Those applied values are copied into the snapshot `cost_model` object and the daily report. The Docker image ships `src/ton_gram/data/gas_profile.json` as package data (`.dockerignore` excludes host `artifacts/`; do not `COPY` that directory).
+
+## Recovery drills
+
+Admin-only. Disabled unless `TON_GRAM_DRILL_TOKEN` is set. Local isolated run (does not touch the paper ledger):
+
+```bash
+python -m ton_gram drill all --isolated --http
+```
+
+Against a running instance (including Railway), drills use a **separate** `drill.sqlite3` next to the paper ledger. They never change paper positions, PnL, the daily report, or the live halt latch:
+
+```bash
+export TON_GRAM_DRILL_TOKEN=long-random-admin-token
+python -m ton_gram drill all --base-url https://YOUR-RAILWAY-HOST --token "$TON_GRAM_DRILL_TOKEN"
+# or
+curl -X POST -H "Authorization: Bearer $TON_GRAM_DRILL_TOKEN" \
+  https://YOUR-RAILWAY-HOST/v1/drill/all
+```
+
+Scenarios: `kill_before_broadcast`, `kill_after_broadcast`, `duplicate_event`, `rpc_timeout`, `bounce`, `delayed_refund`. Each asserts at most one fill, no false fill, and a terminal intent or latched incident. Results include `"namespace": "drill"` and `"paper_untouched": true`.
+
+Reset the **paper** ledger to starting balances (bearer, logged as `halt_events.action=reset`):
+
+```bash
+python -m ton_gram reset-paper
+curl -X POST -H "Authorization: Bearer $TON_GRAM_SNAPSHOT_BEARER_TOKEN" \
+  https://YOUR-RAILWAY-HOST/v1/control/reset
+```
+
 ## Railway control (live paper latch)
 
 Local `python -m ton_gram halt` / `rearm` / `reset-paper` write the **local** SQLite. They do not move the Railway volume latch.
@@ -116,18 +176,70 @@ export HOST=https://ton-gram-worker-production.up.railway.app
 export TOKEN="$TON_GRAM_SNAPSHOT_BEARER_TOKEN"
 
 curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/report/daily"
+curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/learn"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/learn"
 curl -s -H "Authorization: Bearer $TOKEN" "$HOST/v1/docs"
 curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/halt"
 curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/rearm"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" "$HOST/v1/control/reset"
 ```
+
+Do not rearm until you know why the halt latched. Isolated drills (`TON_GRAM_DRILL_TOKEN` + `/v1/drill/all`) use `drill.sqlite3` and leave paper equity untouched.
 
 If a snapshot bearer was ever pasted into chat, rotate it on Railway and treat the old value as burned.
 
 ## Telegram
 
-Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Daily card at `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6** = 08:00 Europe/Vilnius in winter).
+Outbound only, **off by default**. Set `TON_GRAM_TELEGRAM_ENABLED=true`, `TON_GRAM_TELEGRAM_BOT_TOKEN`, and `TON_GRAM_TELEGRAM_CHAT_ID`. Alerts are deduplicated per key for `TON_GRAM_TELEGRAM_DEDUPE_S` seconds (default 1 hour). There is no inbound Telegram command surface (`/status`, `/profit`, `/stop` do nothing).
+
+One daily performance card is sent on the first successful cycle at or after `TON_GRAM_DAILY_SUMMARY_HOUR_UTC` (default **6** = 08:00 Europe/Vilnius in winter, 09:00 in summer). The success key is `daily_summary_sent_YYYY-MM-DD`. A failed send does not burn the day. Critical `halt` cards cover sticky reasons only (`OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, `SETTLEMENT_UNKNOWN`). A stale quote rejects the candidate; it does not latch halt. A feed-down while already halted is recorded and does not rewrite `halt_reason`. `SETTLEMENT_UNKNOWN` is the only upgrade.
+
+Other keys: `incident`, `scope_fail`, `feed_down`, `missed_heartbeat`. Send one uncapped test message with `python -m ton_gram telegram-test`.
+
+## 24/7 on a small VPS / Fly / Railway
+
+Docker image is self-contained. The Dockerfile does **not** declare `VOLUME` (Railway rejects that instruction). Persist `/data` yourself so the SQLite ledger, halt latch, and snapshots survive restarts: use `docker run -v` locally, or attach a Railway volume at `/data`.
+
+```bash
+bash scripts/check-image.sh   # docker build + bundled profile smoke
+docker run -d --name ton-gram-paper --restart unless-stopped \
+  -p 43177:43177 \
+  -v gram-paper:/data \
+  -e TON_GRAM_SNAPSHOT_BEARER_TOKEN=long-random-token \
+  -e TON_GRAM_DATA_DIR=/data \
+  ton-gram-paper
+```
+
+On a VPS, put Caddy or nginx in front and require the bearer token on `/v1/*`. Leave `/healthz` open for the platform health check. `/healthz` reports mode, signing=false, halt, and heartbeat — not whether drills are enabled.
+
+**Fly.io**
+
+```bash
+fly launch --no-deploy
+fly secrets set TON_GRAM_SNAPSHOT_BEARER_TOKEN=long-random-token
+fly volumes create gram_paper --size 1
+fly deploy
+```
+
+Use the included `fly.toml` (`internal_port = 43177`, volume mounted at `/data`).
+
+**Railway**
+
+Create a service from this repo, set the same env vars, and attach a **Railway volume** at `/data` (do not rely on a Dockerfile `VOLUME`). The worker listens on Railway's `PORT` when `TON_GRAM_PORT` is unset. Health check: `GET /healthz`.
+
+Backup `data/paper.sqlite3` regularly. This is the only durable store.
+
+## Baseline strategy
+
+Deterministic mid-deviation fade:
+
+1. Mid = average implied USD₮-micro per GRAM from both pinned quotes. The USD₮→GRAM simulate is sized from the last mid × 1 GRAM (fallback `$10`), not from the GRAM ask, so a healthy bid/ask is not treated as a broken book. If `|mid_g2u − mid_u2g|` exceeds `TON_GRAM_MID_SPREAD_MAX_BPS` (default **200**), the cycle skips (`skip=spread`), does **not** append that print to the SMA, and does not emit a candidate.
+2. After `STRATEGY_LOOKBACK` samples, compare mid to SMA.
+3. If `|deviation| >= STRATEGY_ENTRY_DEVIATION_BPS`, emit a timestamped candidate fading the move.
+4. Risk must still approve it. Out-of-policy size, stale quotes, halt, failed scope, or `all_in_cost` (fee + impact + 50 slip > 80 bps) produce **zero intents**.
 
 ## Hard constraints
 
 - No wallet mnemonic, no private key, no signer, no `sendBoc`.
-- A poisoned snapshot or malformed monitor output cannot authorize anything.
+- Recipients and refund addresses are not encoded into any send payload. STON.fi v2 opcode hex constants live in `DECLARED_OPCODES` for scope metadata only. Paper mode never puts them in a `sendBoc`.
+- A poisoned snapshot or malformed monitor output cannot authorize anything. The worker keeps reconciling paper intents on its own clock.
