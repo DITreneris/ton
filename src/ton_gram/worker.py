@@ -15,7 +15,13 @@ from ton_gram.measure import hydrate_cost_model
 from ton_gram.models import Direction, HaltReason, RiskVerdict
 from ton_gram.poller import MarketPoller, ProviderError
 from ton_gram.report import build_daily_report
-from ton_gram.risk import evaluate_risk, quote_age_ms, should_latch_halt
+from ton_gram.risk import (
+    evaluate_risk,
+    quote_age_ms,
+    quote_gate_all_in_bps,
+    realized_drawdown_usdt_micro,
+    should_latch_halt,
+)
 from ton_gram.scope import unavailable_scope, verify_scope
 from ton_gram.snapshot import build_snapshot
 from ton_gram.strategy import BaselineStrategy
@@ -146,7 +152,7 @@ class PaperWorker:
             self._alert("scope_fail", f"Scope failed closed: {scope.status}")
             self._alert("incident", "Scope verification failed closed")
 
-        self.ledger.settle_due_intents(mid or 0)
+        settled = self.ledger.settle_due_intents(mid or 0)
 
         candidate = None
         decision = None
@@ -238,6 +244,10 @@ class PaperWorker:
             skip = signal["skip"]
         self.ledger.bump_signal_skip(format_utc(self.clock.now())[:10], skip_bucket)
         position = self.ledger.get_position()
+        quote_all_in_bps = None
+        if intent is not None and candidate is not None and quotes:
+            quote_all_in_bps = quote_gate_all_in_bps(quotes[candidate.direction], self.settings)
+        fill_all_in_cost_bps = settled[-1].all_in_cost_bps if settled else None
         return {
             "snapshot_id": snapshot["snapshot_id"],
             "scope": scope.status,
@@ -248,6 +258,10 @@ class PaperWorker:
             "reject_reasons": list(decision.reasons) if decision is not None else None,
             "daily_pnl_usdt_micro": position.daily_pnl_usdt_micro,
             "drawdown_usdt_micro": position.peak_equity_usdt_micro - position.equity_usdt_micro,
+            "day_realized_usdt_micro": position.day_realized_pnl_usdt_micro,
+            "realized_drawdown_usdt_micro": realized_drawdown_usdt_micro(position, self.settings),
+            "quote_all_in_bps": quote_all_in_bps,
+            "fill_all_in_cost_bps": fill_all_in_cost_bps,
             "mid_usdt_per_gram_micro": mid,
             "skip": skip,
             "samples": signal["samples"],
