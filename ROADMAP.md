@@ -42,7 +42,7 @@ Phase 0 and Phase 1 run **in parallel from today**. Do not sit out November wait
 - Railway paper up. Rotate any bearer that was pasted into chat.
 - Daily Telegram card + `POST /v1/learn` on the **Railway** host.
 - One isolated `drill all` green on that host.
-- **Exit.** 7 consecutive UTC days of ledger, feed uptime floor ≥99%, no unexplained `HARD_HALT`. Missing days reset the count. Flat book is fine.
+- **Exit.** 7 consecutive UTC days of ledger, feed uptime floor ≥99%, no unexplained `HARD_HALT`. A recovered STON.fi 500 that left the original `LIMIT_BREACH` in place is explained — do not restart the count. Missing days reset the count. Flat book is fine. Do not rearm because the snapshot reason flipped.
 
 No strategy rewrite here.
 
@@ -55,7 +55,7 @@ Score the live ledger. Do not wait for 1 December.
 | Result | Meaning | Next |
 | --- | --- | --- |
 | ≥8 approved paper fills **and** net > 0 after stressed costs **and** those fills span ≥7 UTC days | Edge candidate | Phase 2 **the same day** |
-| Candidates emit, all rejected by risk | Inspect `rejected_candidates_by_reason`. `all_in_cost` = fee+impact+50 > 80. `daily_loss_limit` + `LIMIT_BREACH` with unrealized dominating = marked 5 000 GRAM ($100 ≈ $0.02/GRAM ≈ 170 bps at $1.16); flat cycles do not latch. Do not lower 25 bps or raise the all-in cap | Stay paper, keep scoring |
+| Candidates emit, all rejected by risk | Inspect `rejected_candidates_by_reason`. `all_in_cost` = fee+impact+50 > 80 (gas is scored on the fill, not this gate). Halt floors are **realized clips** (`risk_floors_are_realized`): `daily_loss_limit` = day_realized ≤ −$100; `drawdown_limit` = $300 under peak clip equity. A marked 5 000 GRAM hole is telemetry, not a stay-paper reason. Do not lower 25 bps or raise the all-in cap | Stay paper, keep scoring. Need 8 fills **and** net after stressed costs |
 | 0 candidates, almost all `skip=flat` | Book has no 25 bps excursion. That is data. | New **paper** signal behind the same risk, or no-go this fade |
 | Spread or halt dominates | Instrumentation or feed problem | Fix worker, do not go live |
 
