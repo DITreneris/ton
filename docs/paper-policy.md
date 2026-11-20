@@ -26,11 +26,19 @@ Sticky halt reasons: `OPERATOR`, `SCOPE_MISMATCH`, `LIMIT_BREACH`, `HARD_HALT`, 
 
 The Grok snapshot maps `HARD_HALT`/`OPERATOR` → `reason_code=HARD_HALT` and every other latched reason → `LIMIT_BREACH`. Read `open_execution_state.halt_reason`, not only the envelope.
 
-`daily_loss_limit` (and then `LIMIT_BREACH`) is **marked equity of the genesis paper wallet**, not realized clip P&L. Default inventory is 5 000 GRAM. 1% of the $10k funding cap is $100 = **~$0.02 / GRAM** (~**170 bps** at $1.16). Risk only sees this on the next candidate. Flat cycles can sit under the floor with `halt=false`. See `daily_loss_marks_inventory`.
+Halt floors are **realized clip P&L**. See `risk_floors_are_realized`.
 
-`daily_pnl` resets on the first mark of the new UTC day. **Drawdown vs peak equity does not.** Peak equity still ratchets on a new high while `entry_halt` is True — halt blocks clips, not marks. See `halt_does_not_freeze_peak`. A green daily P&L after midnight does not make rearm safe if `drawdown_limit` would still fire. Trust `drawdown_usdt_micro` on the cycle line, not `daily_pnl_usdt_micro`. `['entry_halt']` without `drawdown_limit` means the `$300` floor recovered this cycle, not that rearm is safe. See `read_drawdown_not_daily_pnl`. Do not rearm to manufacture fills.
+- `daily_loss_limit` when `day_realized_pnl <= -$100` (1% of $10k). UTC day still resets. Marked `daily_pnl_usdt_micro` is telemetry.
+- `drawdown_limit` when realized clip equity is **$300** under `peak_clip_equity`. Peak clip equity ratchets **only on fills**. Marked 5 000 GRAM vs peak is telemetry (`drawdown_usdt_micro` on the cycle). Genesis inventory still marks; it no longer latches.
+- Cycle line prints both: `daily_pnl_usdt_micro` / `drawdown_usdt_micro` (marks) and `day_realized_usdt_micro` / `realized_drawdown_usdt_micro` (floors). Operator reads **realized** for rearm.
 
-A 25 bps print while halted is a rejected candidate (`entry_halt`, usually also `drawdown_limit`), not fill 2/8. Cycle skip is `halted`, not `emitted`. The cycle line includes `reject_reasons`, `daily_pnl_usdt_micro`, and `drawdown_usdt_micro`. See `halted_print_is_not_fill_two`.
+The 5 Nov `LIMIT_BREACH` was marked inventory (`daily_loss_marks_inventory`): −$118 on 5 000 GRAM vs a $1 fade. That latch is still sticky until **rearm after this ships**. Do not `reset-paper` to chase a green card.
+
+`daily_pnl` (marked) and `day_realized` both reset on the first mark of the new UTC day. **Marked drawdown vs peak equity does not.** Peak marked equity still ratchets on a new high while `entry_halt` is True — halt blocks clips, not marks. See `halt_does_not_freeze_peak`. A green daily P&L after midnight does not make rearm safe **until this image is live**; after it is live, read realized drawdown, not today's mark. See `read_drawdown_not_daily_pnl`.
+
+A 25 bps print while halted is a rejected candidate (`entry_halt`, and `drawdown_limit` / `daily_loss_limit` only if **realized** floors are through), not fill 2/8. Cycle skip is `halted`, not `emitted`. See `halted_print_is_not_fill_two`.
+
+After Railway SUCCESS of the tip SHA: snapshot still shows the old `LIMIT_BREACH` and ~$1.2k marked hole with realized ~0. Then `POST /v1/control/rearm`. Do **not** `reset-paper`. Next fill is 2/8, not a win. `POST /v1/learn`. If the first live day after rearm burns $100 realized or $300 realized from clip peak, do not rearm to manufacture the rest of the 8.
 
 A provider 500 is `skip=feed_down` and `scope=UNAVAILABLE`. It must not look like SMA `warming` or `SCOPE_MISMATCH`. Cycle logs include `halt_reason`. Worker INFO **and WARNING** go to stdout so Railway does not tag a healthy cycle as `severity=error`. Filter STON.fi 500s on `provider failure` in the message, not the Railway error column.
 
@@ -38,7 +46,7 @@ Railway boots every GitHub `main` commit. Score the SUCCESS deploy of the tip SH
 
 ## Learn and reset
 
-`learn` scores the live `Settings` into `rules_used`. It still forces `signing=false` and will not recommend lowering 25 bps or raising `max_all_in_cost_bps`. `reset-paper` wipes fills and also clears `learn_last_json` so a reset day does not keep yesterday’s score.
+`learn` scores the live `Settings` into `rules_used`. It still forces `signing=false` and will not recommend lowering 25 bps or raising `max_all_in_cost_bps`. Phase 1 net is fill shortfall after fee, impact, 50 slip, delay, **and gas**. Gas is not in the 80 bps reject. A 25 bps 2-minute fade vs ~80–135 bps stressed cost is expected to fail `net > 0`. `reset-paper` wipes fills (including `int_20261105T133435Z_1971`) and also clears `learn_last_json`. Do not reset-paper to chase a green card.
 
 ## Telegram
 
