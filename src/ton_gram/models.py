@@ -116,8 +116,10 @@ class Quote:
     def usdt_per_gram_micro(self) -> int:
         if self.direction is Direction.GRAM_TO_USDT:
             from ton_gram.units import usdt_per_gram_micro
+
             return usdt_per_gram_micro(self.offer_units, self.ask_units)
         from ton_gram.units import usdt_per_gram_micro
+
         return usdt_per_gram_micro(self.ask_units, self.offer_units)
 
 
@@ -196,4 +198,6 @@ class Position:
     peak_equity_usdt_micro: int
     daily_pnl_usdt_micro: int
     realized_pnl_usdt_micro: int
+    day_realized_pnl_usdt_micro: int
+    peak_clip_equity_usdt_micro: int
     day_utc: str

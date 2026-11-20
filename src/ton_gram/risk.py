@@ -29,6 +29,21 @@ def notional_usdt_micro(candidate: Candidate, quote: Quote) -> int:
     return usdt_value_micro(candidate.offer_units, mid)
 
 
+def clip_equity_usdt_micro(position: Position, settings: Settings) -> int:
+    """Funding cap plus realized clip P&L. Marked 5 000 GRAM is not in this number."""
+    return int(settings.funding_cap_usdt_micro) + int(position.realized_pnl_usdt_micro)
+
+
+def realized_drawdown_usdt_micro(position: Position, settings: Settings) -> int:
+    peak = int(position.peak_clip_equity_usdt_micro or settings.funding_cap_usdt_micro)
+    return max(0, peak - clip_equity_usdt_micro(position, settings))
+
+
+def quote_gate_all_in_bps(quote: Quote, settings: Settings) -> int:
+    """80 bps reject gate: fee + impact + 50 slip. Gas is scored on the fill, not here."""
+    return int(quote.fee_percent_bps) + int(quote.price_impact_bps) + int(settings.conservative_slippage_bps)
+
+
 def evaluate_risk(
     *,
     settings: Settings,
@@ -80,13 +95,16 @@ def evaluate_risk(
         if candidate.offer_units > position.usdt_micro:
             reasons.append("insufficient_usdt")
 
-    if position.daily_pnl_usdt_micro <= -apply_bps(settings.funding_cap_usdt_micro, settings.daily_loss_bps):
+    if position.day_realized_pnl_usdt_micro <= -apply_bps(
+        settings.funding_cap_usdt_micro, settings.daily_loss_bps
+    ):
         reasons.append("daily_loss_limit")
-    drawdown = position.peak_equity_usdt_micro - position.equity_usdt_micro
-    if drawdown >= apply_bps(settings.funding_cap_usdt_micro, settings.drawdown_bps):
+    if realized_drawdown_usdt_micro(position, settings) >= apply_bps(
+        settings.funding_cap_usdt_micro, settings.drawdown_bps
+    ):
         reasons.append("drawdown_limit")
 
-    all_in_bps = quote.fee_percent_bps + quote.price_impact_bps + settings.conservative_slippage_bps
+    all_in_bps = quote_gate_all_in_bps(quote, settings)
     if all_in_bps > settings.max_all_in_cost_bps:
         reasons.append("all_in_cost")
 
@@ -109,9 +127,12 @@ def should_latch_halt(decision: RiskDecision) -> bool:
 
 
 __all__ = [
+    "clip_equity_usdt_micro",
     "evaluate_risk",
     "notional_usdt_micro",
     "quote_age_ms",
+    "quote_gate_all_in_bps",
+    "realized_drawdown_usdt_micro",
     "should_latch_halt",
     "gram_from_usdt",
 ]
