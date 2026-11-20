@@ -12,7 +12,9 @@ python -m ton_gram learn --day YYYY-MM-DD
 
 If candidates emit and `rejected_candidates_by_reason.all_in_cost` dominates, the lesson is `all_in_cost_gate`. That means fee + impact + 50 bps slip exceeded 80 bps. Inspect the quotes. Do not loosen the entry gate.
 
-If halt is `LIMIT_BREACH`, `rejected_candidates_by_reason.daily_loss_limit` is set, and unrealized PnL is the loss driver, the lesson is `daily_loss_marks_inventory`. That is marked genesis inventory (5 000 GRAM) vs UTC start-of-day: $100 = ~$0.02/GRAM (~170 bps at $1.16), not a blown clip. Risk only evaluates the floor when a candidate exists. Score the day. Do not rearm to manufacture fills. Do not lower 25 bps.
+If halt is `LIMIT_BREACH`, `rejected_candidates_by_reason.daily_loss_limit` is set, and unrealized PnL is the loss driver, the lesson is `daily_loss_marks_inventory`. That is **telemetry**: marked genesis inventory (5 000 GRAM) vs UTC start-of-day: $100 = ~$0.02/GRAM (~170 bps at $1.16), not a blown clip. After `risk_floors_are_realized`, that mark does not latch. Score the day. Do not lower 25 bps.
+
+If the marked hole is large while realized floors are open (`day_realized` above −$100 and realized drawdown under $300), the lesson is `risk_floors_are_realized`. Rearm **after this ships**, not because daily P&L is green. Do not `reset-paper`. Do not lower 25. Do not raise 80. If $100 realized or $300 realized from clip peak burns, halt is doing its job on trades.
 
 If halt is on, candidates emitted, trades are 0, and rejects are `entry_halt` / `drawdown_limit`, the lesson is `halted_print_is_not_fill_two`. That 25 bps print is not fill 2/8. `['entry_halt']` alone is the sticky latch; `drawdown_limit` means peak is still through `$300`. Do not rearm.
 
@@ -24,7 +26,7 @@ If `feed_down` skips are present and `halt_reason` is still `LIMIT_BREACH`, the 
 
 `daily_pnl` resets on the first UTC mark. Drawdown vs peak does not. A later STON.fi 500 must not rewrite `halt_reason` (`halt_reason_first_latch_wins`). Do not rearm because the snapshot flipped `HARD_HALT` ↔ `LIMIT_BREACH`.
 
-When `trades_count` > 0, the lesson is `audit_fills_after_costs`. Score net after fee, impact, 50 bps slip, delay, and gas.
+When `trades_count` > 0, the lesson is `audit_fills_after_costs`. Phase 1 net is after fee, impact, 50 bps slip, delay, and gas — not a reserved intent. A 25 bps 2-minute fade vs ~80–135 bps stressed cost is expected to fail `net > 0`. That is the verdict, not a retune. Gas is in the score, not the 80 bps reject.
 
 `reset-paper` clears `learn_last_json`. Learn does **not** write the document catalog. File a new lesson in `docs/lessons.md` and `docs sync`.
 
